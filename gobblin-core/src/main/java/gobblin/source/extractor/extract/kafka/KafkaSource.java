@@ -51,6 +51,7 @@ import gobblin.source.extractor.extract.EventBasedSource;
 import gobblin.source.extractor.extract.kafka.workunit.packer.KafkaWorkUnitPacker;
 import gobblin.source.workunit.Extract;
 import gobblin.source.workunit.WorkUnit;
+import gobblin.stunlock.NewStunlockKafkaAPI;
 import gobblin.util.DatasetFilterUtils;
 
 
@@ -111,7 +112,7 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
   private final Set<KafkaPartition> partitionsToBeProcessed = Sets.newHashSet();
 
   private Closer closer = Closer.create();
-  private KafkaWrapper kafkaWrapper;
+  private NewStunlockKafkaAPI kafkaWrapper;
   private int failToGetOffsetCount = 0;
   private int offsetTooEarlyCount = 0;
   private int offsetTooLateCount = 0;
@@ -120,11 +121,12 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
   public List<WorkUnit> getWorkunits(SourceState state) {
     Map<String, List<WorkUnit>> workUnits = Maps.newHashMap();
 
-    this.kafkaWrapper = this.closer.register(KafkaWrapper.create(state));
+    this.kafkaWrapper = this.closer.register(new NewStunlockKafkaAPI(state));
 
     List<KafkaTopic> topics = getFilteredTopics(state);
     Map<String, State> topicSpecificStateMap = getTopicSpecificState(topics, state);
     for (KafkaTopic topic : topics) {
+    	LOG.info("Get workUnits for topic " + topic.getName());
       workUnits.put(topic.getName(),
           getWorkUnitsForTopic(topic, state, Optional.fromNullable(topicSpecificStateMap.get(topic.getName()))));
     }

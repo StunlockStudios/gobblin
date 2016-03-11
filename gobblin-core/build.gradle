@@ -15,6 +15,7 @@ dependencies {
   compile project(":gobblin-utility")
   compile project(":gobblin-metrics")
 
+  compile externalDependency.confluentRegistry
   compile externalDependency.commonsCodec
   compile externalDependency.commonsDbcp
   compile externalDependency.commonsMath
@@ -26,6 +27,7 @@ dependencies {
   compile externalDependency.jodaTime
   compile externalDependency.jacksonCore
   compile externalDependency.jacksonMapper
+  compile externalDependency.jettison
   compile externalDependency.jsch
   compile externalDependency.commonsLang3
   compile externalDependency.commonsIo

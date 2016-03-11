@@ -15,6 +15,9 @@ subprojects {
       url "https://repository.cloudera.com/artifactory/cloudera-repos/"
     }
     maven {
+      url "http://packages.confluent.io/maven/"
+    }
+    maven {
       url "http://conjars.org/repo"
     }
   }
