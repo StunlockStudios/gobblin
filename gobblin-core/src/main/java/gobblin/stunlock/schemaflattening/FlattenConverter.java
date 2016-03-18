@@ -3,6 +3,7 @@ package gobblin.stunlock.schemaflattening;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import org.apache.avro.Schema;
@@ -18,6 +19,7 @@ import gobblin.converter.AvroToAvroConverterBase;
 import gobblin.converter.DataConversionException;
 import gobblin.converter.SchemaConversionException;
 import gobblin.stunlock.ConfluentSchemaRegistry;
+import gobblin.stunlock.Kafka0900API;
 import gobblin.stunlock.StunlockKafkaAvroExtractor;
 import gobblin.util.ForkOperatorUtils;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
@@ -26,13 +28,16 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 public class FlattenConverter extends AvroToAvroConverterBase
 {
 	private static final Logger LOG = LoggerFactory.getLogger(FlattenConverter.class);
+	public static final String FLATTEN_ARRAY_NAME = "schemaflattener.array.name";
+	public static final String FLATTEN_ARRAY_OUTPUTSCHEMA = "schemaflattener.output.schemaname";
 
 	@Override
 	public Schema convertSchema(Schema inputSchema, WorkUnitState workUnit) throws SchemaConversionException
 	{
-		String arrayNameProp = getForkedPropName(workUnit, FlattenForkOperator.FLATTEN_ARRAY_NAME);
-		String outputSchemaNameProp = getForkedPropName(workUnit, FlattenForkOperator.FLATTEN_ARRAY_OUTPUTSCHEMA);
-		
+		Properties props = workUnit.getProperties();
+		String arrayNameProp = getForkedPropName(workUnit, FLATTEN_ARRAY_NAME);
+		String outputSchemaNameProp = getForkedPropName(workUnit, FLATTEN_ARRAY_OUTPUTSCHEMA);
+
 		if (workUnit.contains(arrayNameProp) == false)
 			throw new SchemaConversionException("EXPECTED ARRAY NAME PROPERTY '" + arrayNameProp + "' NOT SET!");
 		if (workUnit.contains(outputSchemaNameProp) == false)
@@ -43,11 +48,11 @@ public class FlattenConverter extends AvroToAvroConverterBase
 		try
 		{
 			FlattenedSchema schema = SchemaFlattener.getFlattenedSchema(inputSchema, arrayName, outputSchemaName);
-			TESTLOG("SCHEMA FLATTENED FOR ARRAY " + arrayName + ". REGISTERING SCHEMA.");
+			LOG.info("SCHEMA FLATTENED FOR ARRAY " + arrayName + ". REGISTERING SCHEMA '" + schema.Schema.getName());
 
 			// REGISTER THE SCHEMA!
 			int schemaID = RegisterSchema(workUnit, schema.Schema);
-			TESTLOG("SCHEMA REGISTERED WITH ID " + schemaID);
+			LOG.info("SCHEMA REGISTERED WITH ID " + schemaID);
 			return schema.Schema;
 		}
 		catch (Exception e)
@@ -58,7 +63,13 @@ public class FlattenConverter extends AvroToAvroConverterBase
 
 	private static String getForkedPropName(WorkUnitState workUnit, String propName)
 	{
-		int forkIndex = workUnit.getPropAsInt(ConfigurationKeys.FORK_BRANCH_ID_KEY, 0);
+		if (!workUnit.contains(ConfigurationKeys.FORK_BRANCH_ID_KEY))
+		{
+			LOG.error("Fork properties doesn't contain FORK_BRANCH_ID_KEY");
+			return "";
+		}
+
+		int forkIndex = workUnit.getPropAsInt(ConfigurationKeys.FORK_BRANCH_ID_KEY);
 		return propName + "." + forkIndex;
 	}
 
@@ -69,12 +80,12 @@ public class FlattenConverter extends AvroToAvroConverterBase
 		int maxCacheSize = Integer.parseInt(properties.getProperty(ConfluentSchemaRegistry.SCHEMA_REGISTRY_MAX_CACHE_SIZE, ConfluentSchemaRegistry.DEFAULT_SCHEMA_REGISTRY_MAX_CACHE_SIZE));
 
 		CachedSchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(url, maxCacheSize);
-		return schemaRegistry.register(schema.getFullName(), schema);
+		return schemaRegistry.register(schema.getName(), schema);
 	}
 
 	private void TESTLOG(String text)
 	{
-		// LOG.error(text);
+		//LOG.error(text);
 	}
 
 	@Override
@@ -91,7 +102,7 @@ public class FlattenConverter extends AvroToAvroConverterBase
 		TESTLOG("Input Record: \n" + inputRecord.toString());
 		TESTLOG("----");
 
-		String arrayNameProp = getForkedPropName(workUnit, FlattenForkOperator.FLATTEN_ARRAY_NAME);
+		String arrayNameProp = getForkedPropName(workUnit, FLATTEN_ARRAY_NAME);
 		if (workUnit.contains(arrayNameProp) == false)
 		{
 			throw new DataConversionException("EXPECTED ARRAY NAME PROPERTY '" + arrayNameProp + "' NOT SET!");

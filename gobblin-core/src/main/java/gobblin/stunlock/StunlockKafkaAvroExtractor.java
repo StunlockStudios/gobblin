@@ -8,8 +8,9 @@ import org.slf4j.LoggerFactory;
 
 import gobblin.configuration.WorkUnitState;
 import gobblin.metrics.kafka.SchemaRegistryException;
+import gobblin.source.extractor.extract.kafka.KafkaAvroExtractor;
 
-public class StunlockKafkaAvroExtractor extends NewStunlockKafkaAvroExtractor<Integer>
+public class StunlockKafkaAvroExtractor extends KafkaAvroExtractor<Integer>
 {
 	private static final Logger LOG = LoggerFactory.getLogger(StunlockKafkaAvroExtractor.class);
 
@@ -18,20 +19,20 @@ public class StunlockKafkaAvroExtractor extends NewStunlockKafkaAvroExtractor<In
 	public StunlockKafkaAvroExtractor(WorkUnitState state)
 	{
 		super(state);
-		LOG.info("Vad fan? StunlockKafkaAvroExtractor");
+		LOG.info("StunlockKafkaAvroExtractor Constructor");
 	}
 
 	@Override
 	protected Decoder getDecoder(byte[] payload)
 	{
-		LOG.info("Vad fan? StunlockKafkaAvroExtractor");
+		//LOG.info("StunlockKafkaAvroExtractor getDecoder");
 		return DecoderFactory.get().binaryDecoder(payload, 1 + 4, payload.length - 1 - 4, null);
 	}
 
 	@Override
 	protected Schema getRecordSchema(byte[] payload)
 	{
-		LOG.info("Vad fan? StunlockKafkaAvroExtractor");
+		//LOG.info("StunlockKafkaAvroExtractor getRecordSchema");
 		if (payload[0] != MAGIC_BYTE)
 		{
 			return null;

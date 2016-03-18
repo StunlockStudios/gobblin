@@ -195,7 +195,10 @@ public class AvroSchemaAndTimeWriterPartitioner implements WriterPartitioner<Gen
 	private int GetSchemaId(GenericRecord record) throws IOException, RestClientException
 	{
 		Schema recordSchema = record.getSchema();
-		return this.schemaRegistry.register(recordSchema.getFullName(), recordSchema);
+		//LOG.info("PARTITIONER GetSchemaID: Get for schema with name: " + recordSchema.getName());
+		int schemaId =  this.schemaRegistry.register(recordSchema.getName(), recordSchema);
+		//LOG.info("PARTITIONER GetSchemaID: Result schema Id: " + schemaId);
+		return schemaId;
 	}
 
 	@Override
@@ -237,7 +240,7 @@ public class AvroSchemaAndTimeWriterPartitioner implements WriterPartitioner<Gen
 
 		if (this.timestampToPathFormatter.isPresent())
 		{
-			String partitionedPath = "SchemaId_" + recordSchemaId + Path.SEPARATOR + getPartitionedPath(timestamp);
+			String partitionedPath = record.getSchema().getName() + "_" + recordSchemaId + Path.SEPARATOR + getPartitionedPath(timestamp);
 			partition.put(PARTITIONED_RECORD_PARTITIONED_PATH, partitionedPath);
 		}
 		else

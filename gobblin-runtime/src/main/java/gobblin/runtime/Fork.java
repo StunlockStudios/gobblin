@@ -124,7 +124,7 @@ public class Fork implements Closeable, Runnable, FinalState {
 
     this.converter =
         this.closer.register(new MultiConverter(this.taskContext.getConverters(this.index, this.forkTaskState)));
-    this.convertedSchema = Optional.fromNullable(this.converter.convertSchema(schema, this.taskState));
+    this.convertedSchema = Optional.fromNullable(this.converter.convertSchema(schema, this.forkTaskState));
     this.rowLevelPolicyChecker = this.closer.register(this.taskContext.getRowLevelPolicyChecker(this.index));
     this.rowLevelPolicyCheckingResult = new RowLevelPolicyCheckResults();
 
@@ -405,7 +405,7 @@ public class Fork implements Closeable, Runnable, FinalState {
           buildWriterIfNotPresent();
 
           // Convert the record, check its data quality, and finally write it out if quality checking passes.
-          for (Object convertedRecord : this.converter.convertRecord(this.convertedSchema, record, this.taskState)) {
+          for (Object convertedRecord : this.converter.convertRecord(this.convertedSchema, record, this.forkTaskState)) {
             if (this.rowLevelPolicyChecker.executePolicies(convertedRecord, this.rowLevelPolicyCheckingResult)) {
               this.writer.get().write(convertedRecord);
             }

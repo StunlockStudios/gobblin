@@ -24,6 +24,7 @@ apply plugin: 'idea'
 
 idea.project {
   ext.languageLevel = JavaVersion.VERSION_1_7
+}
 
 
 ext.build_script_dir = "${projectDir.path}/build_script"

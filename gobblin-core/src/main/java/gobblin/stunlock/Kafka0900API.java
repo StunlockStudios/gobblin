@@ -14,6 +14,7 @@ package gobblin.stunlock;
 
 import gobblin.configuration.ConfigurationKeys;
 import gobblin.configuration.State;
+import gobblin.source.extractor.extract.kafka.KafkaAPI;
 import gobblin.source.extractor.extract.kafka.KafkaOffsetRetrievalFailureException;
 import gobblin.source.extractor.extract.kafka.KafkaPartition;
 import gobblin.source.extractor.extract.kafka.KafkaTopic;
@@ -62,22 +63,23 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.net.HostAndPort;
+import gobblin.source.extractor.extract.kafka.KafkaWrapper;
 
 /**
  * Wrapper for the new Kafka API.
  */
-public class NewStunlockKafkaAPI implements Closeable
+public class Kafka0900API extends KafkaAPI
 {
-	private static final Logger LOG = LoggerFactory.getLogger(NewStunlockKafkaAPI.class);
+	private static final Logger LOG = LoggerFactory.getLogger(Kafka0900API.class);
 
 	KafkaConsumer<byte[], byte[]> consumer;
 
-	public NewStunlockKafkaAPI(State state)
-	{
+	public Kafka0900API(State state)
+	{		
 		Preconditions.checkNotNull(state.getProp(ConfigurationKeys.KAFKA_BROKERS), "Need to specify at least one Kafka broker.");
 		String kafkaBroker = state.getProp(ConfigurationKeys.KAFKA_BROKERS);
 
-		LOG.info("NewStunlockKafkaAPI Constructor");
+		LOG.info("Kafka0900API Constructor");
 		Properties props = new Properties();
 		props.put("bootstrap.servers", kafkaBroker);
 		props.put("group.id", "test");
@@ -87,12 +89,12 @@ public class NewStunlockKafkaAPI implements Closeable
 		props.put("partition.assignment.strategy", "org.apache.kafka.clients.consumer.RangeAssignor");
 
 		consumer = new KafkaConsumer<byte[], byte[]>(props);
-		LOG.info("NewStunlockKafkaAPI Constructed");
+		LOG.info("Kafka0900API Constructed");
 	}
 
 	public List<KafkaTopic> getFilteredTopics(List<Pattern> blacklist, List<Pattern> whitelist)
 	{
-		LOG.info("NewStunlockKafkaAPI getFilteredTopics Start");
+		LOG.info("Kafka0900API getFilteredTopics Start "); 
 		Map<String, List<PartitionInfo>> topicMetadataList = fetchTopicMetadataFromBroker(blacklist, whitelist);
 
 		List<KafkaTopic> filteredTopics = Lists.newArrayList();
@@ -102,7 +104,7 @@ public class NewStunlockKafkaAPI implements Closeable
 			LOG.info("Got topic " + topicMetadata.getKey() + " partitions = " + partitions.size());
 			filteredTopics.add(new KafkaTopic(topicMetadata.getKey(), partitions));
 		}
-		LOG.info("NewStunlockKafkaAPI getFilteredTopics End");
+		LOG.info("Kafka0900API getFilteredTopics End");
 		return filteredTopics;
 	}
 
@@ -146,22 +148,22 @@ public class NewStunlockKafkaAPI implements Closeable
 
 	public long getEarliestOffset(KafkaPartition partition) throws KafkaOffsetRetrievalFailureException
 	{
-		LOG.info("NewStunlockKafkaAPI getEarliestOffset Start");
+		LOG.info("Kafka0900API getEarliestOffset Start");
 		TopicPartition topicAndPartition = new TopicPartition(partition.getTopicName(), partition.getId());
 		List<TopicPartition> assignedPartitions = new ArrayList<TopicPartition>();
 		assignedPartitions.add(topicAndPartition);
 		consumer.assign(assignedPartitions);
-		LOG.info("NewStunlockKafkaAPI getEarliestOffset Assigned");
+		LOG.info("Kafka0900API getEarliestOffset Assigned");
 		consumer.seekToBeginning(topicAndPartition);
-		LOG.info("NewStunlockKafkaAPI getEarliestOffset seekToBeginning");
+		LOG.info("Kafka0900API getEarliestOffset seekToBeginning");
 		long position = consumer.position(topicAndPartition);
-		LOG.info("NewStunlockKafkaAPI getEarliestOffset End");
+		LOG.info("Kafka0900API getEarliestOffset End");
 		return position;
 	}
 
 	public long getLatestOffset(KafkaPartition partition) throws KafkaOffsetRetrievalFailureException
 	{
-		LOG.info("NewStunlockKafkaAPI getLatestOffset Start");
+		LOG.info("Kafka0900API getLatestOffset Start");
 		TopicPartition topicAndPartition = new TopicPartition(partition.getTopicName(), partition.getId());
 		List<TopicPartition> assignedPartitions = new ArrayList<TopicPartition>();
 		assignedPartitions.add(topicAndPartition);
@@ -177,7 +179,7 @@ public class NewStunlockKafkaAPI implements Closeable
 			LOG.error("Error fetching kafka position for partition " + partition.toString() + ": " + exc);
 			throw exc;
 		}
-		LOG.info("NewStunlockKafkaAPI getLatestOffset End");
+		LOG.info("Kafka0900API getLatestOffset End");
 		return position;
 	}
 
@@ -188,14 +190,14 @@ public class NewStunlockKafkaAPI implements Closeable
 
 	public Iterator<MessageAndOffset> fetchNextMessageBuffer(KafkaPartition partition, long nextOffset, long maxOffset)
 	{
-		LOG.info("NewStunlockKafkaAPI fetchNextMessageBuffer Start");
-		LOG.info("fetchNextMessageBuffer on Thread ID: " + Thread.currentThread().getId());
+		LOG.info("Kafka0900API fetchNextMessageBuffer Start on Thread ID: " + Thread.currentThread().getId());
 		if (nextOffset > maxOffset)
 		{
 			return null;
 		}
 		
 		long toFetch = maxOffset - nextOffset;
+		LOG.info("Kafka0900API Fetch NextOffset: " + nextOffset + ", MaxOffset: " + maxOffset + ", ToFetch: " + toFetch);
 
 		TopicPartition topicPartition = new TopicPartition(partition.getTopicName(), partition.getId());
 		List<TopicPartition> assignedPartitions = new ArrayList<TopicPartition>();
@@ -208,6 +210,8 @@ public class NewStunlockKafkaAPI implements Closeable
 			ConsumerRecords<byte[], byte[]> recordsFetched = consumer.poll(100);
 			boolean finished = false;
 			for (ConsumerRecord<byte[], byte[]> record : recordsFetched) {
+				if(records.size() % 100 == 0)
+					LOG.info("Kafka0900API Record " + records.size() + " fetched");
 				records.add(record);
 				if (records.size() >= toFetch) {
 					finished = true;
@@ -217,13 +221,14 @@ public class NewStunlockKafkaAPI implements Closeable
 			if (finished)
 				break;
 		}
+		LOG.info("Kafka0900API Fetch Complete, result fetch count: " + records.size());
 		List<MessageAndOffset> messages = new ArrayList<MessageAndOffset>();
 		for (ConsumerRecord<byte[], byte[]> record : records)
 		{
 			messages.add(new MessageAndOffset(new Message(record.value(), record.key()), record.offset()));
 		}
 
-		LOG.info("NewStunlockKafkaAPI fetchNextMessageBuffer End");
+		LOG.info("Kafka0900API fetchNextMessageBuffer End");
 		return messages.iterator();
 	}
 }

@@ -24,8 +24,6 @@ public class FlattenForkOperator implements ForkOperator<CopyableSchema, Copyabl
 	private final List<Boolean> records = new ArrayList<Boolean>();
 
 	public static final String FLATTEN_ARRAY_COUNT = "schemaflattener.arraycount";
-	public static final String FLATTEN_ARRAY_NAME = "schemaflattener.array.name";
-	public static final String FLATTEN_ARRAY_OUTPUTSCHEMA = "schemaflattener.output.schemaname";
 
 	private int arrayCount;
 
@@ -47,6 +45,7 @@ public class FlattenForkOperator implements ForkOperator<CopyableSchema, Copyabl
 	@Override
 	public List<Boolean> forkSchema(WorkUnitState workUnitState, CopyableSchema input)
 	{
+		LOG.info("FORKING SCHEMA TO " + arrayCount + " FORKS");
 		fillForkList(workUnitState, schemas);
 		return schemas;
 	}

@@ -49,3 +49,4 @@ out/
 **/mainGeneratedRest
 gobblin-dist*
 gobblin.tar.gz
+/gobblin-standalone.sh
