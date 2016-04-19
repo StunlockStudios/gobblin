@@ -114,8 +114,6 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
 
   private final Set<KafkaPartition> partitionsToBeProcessed = Sets.newConcurrentHashSet();
 
-  private Closer closer = Closer.create();
-  private Kafka0900API kafkaWrapper;
   private final AtomicInteger failToGetOffsetCount = new AtomicInteger(0);
   private final AtomicInteger offsetTooEarlyCount = new AtomicInteger(0);
   private final AtomicInteger offsetTooLateCount = new AtomicInteger(0);
@@ -125,9 +123,10 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
   public List<WorkUnit> getWorkunits(SourceState state) {
     Map<String, List<WorkUnit>> workUnits = Maps.newConcurrentMap(); 
 
-    this.kafkaWrapper = this.closer.register(new Kafka0900API(state));
-
-    List<KafkaTopic> topics = getFilteredTopics(state);
+    Kafka0900API kafkaAPI = new Kafka0900API(state);    
+    List<KafkaTopic> topics = getFilteredTopics(kafkaAPI, state);
+    closeKafkaAPI(kafkaAPI);
+    
     Map<String, State> topicSpecificStateMap = getTopicSpecificState(topics, state);
     
     int numOfThreads =
@@ -198,6 +197,18 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
     }
     return Maps.newHashMap();
   }
+  
+  private void closeKafkaAPI(Kafka0900API kafkaAPI)
+  {
+		try
+		{
+			kafkaAPI.close();
+		}
+		catch (IOException e)
+		{
+			LOG.error("Failed to close kafkaWrapper", e);
+		}
+  }
 
   private void createEmptyWorkUnitsForSkippedPartitions(Map<String, List<WorkUnit>> workUnits,
       Map<String, State> topicSpecificStateMap, SourceState state) {
@@ -228,23 +239,32 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
    * This function need to be thread safe since it is called in the Runnable
    */
   private List<WorkUnit> getWorkUnitsForTopic(KafkaTopic topic, SourceState state, Optional<State> topicSpecificState) {
-    boolean topicQualified = isTopicQualified(topic);
-
-    List<WorkUnit> workUnits = Lists.newArrayList();
-    for (KafkaPartition partition : topic.getPartitions()) {
-      WorkUnit workUnit = getWorkUnitForTopicPartition(partition, state, topicSpecificState);
-      this.partitionsToBeProcessed.add(partition);
-      if (workUnit != null) {
-
-        // For disqualified topics, for each of its workunits set the high watermark to be the same
-        // as the low watermark, so that it will be skipped.
-        if (!topicQualified) {
-          skipWorkUnit(workUnit);
-        }
-        workUnits.add(workUnit);
-      }
-    }
-    return workUnits;
+	  	Kafka0900API kafkaWrapper = null;
+	    try
+	    {
+	    	kafkaWrapper = new Kafka0900API(state);    
+		    boolean topicQualified = isTopicQualified(topic);   
+			
+		    List<WorkUnit> workUnits = Lists.newArrayList();
+		    for (KafkaPartition partition : topic.getPartitions()) {
+		      WorkUnit workUnit = getWorkUnitForTopicPartition(kafkaWrapper, partition, state, topicSpecificState);
+		      this.partitionsToBeProcessed.add(partition);
+		      if (workUnit != null) {
+		
+		        // For disqualified topics, for each of its workunits set the high watermark to be the same
+		        // as the low watermark, so that it will be skipped.
+		        if (!topicQualified) {
+		          skipWorkUnit(workUnit);
+		        }
+		        workUnits.add(workUnit);
+		      }
+		    }
+		    return workUnits;
+	    }
+	    finally
+	    {
+	    	closeKafkaAPI(kafkaWrapper);
+	    }
   }
 
   /**
@@ -262,15 +282,15 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
     workUnit.setProp(ConfigurationKeys.WORK_UNIT_HIGH_WATER_MARK_KEY, workUnit.getLowWaterMark());
   }
 
-  private WorkUnit getWorkUnitForTopicPartition(KafkaPartition partition, SourceState state,
+  private WorkUnit getWorkUnitForTopicPartition(KafkaAPI kafkaWrapper, KafkaPartition partition, SourceState state,
       Optional<State> topicSpecificState) {
     Offsets offsets = new Offsets();
 
     boolean failedToGetKafkaOffsets = false;
 
     try {
-      offsets.setEarliestOffset(this.kafkaWrapper.getEarliestOffset(partition));
-      offsets.setLatestOffset(this.kafkaWrapper.getLatestOffset(partition));
+      offsets.setEarliestOffset(kafkaWrapper.getEarliestOffset(partition));
+      offsets.setLatestOffset(kafkaWrapper.getLatestOffset(partition));
     } catch (KafkaOffsetRetrievalFailureException e) {
       failedToGetKafkaOffsets = true;
     }
@@ -443,10 +463,10 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
     return workUnit;
   }
 
-  private List<KafkaTopic> getFilteredTopics(SourceState state) {
+  private List<KafkaTopic> getFilteredTopics(KafkaAPI kafkaWrapper, SourceState state) {
     List<Pattern> blacklist = getBlacklist(state);
     List<Pattern> whitelist = getWhitelist(state);
-    return this.kafkaWrapper.getFilteredTopics(blacklist, whitelist);
+    return kafkaWrapper.getFilteredTopics(blacklist, whitelist);
   }
 
   private static List<Pattern> getBlacklist(State state) {
@@ -464,12 +484,6 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
     state.setProp(ConfigurationKeys.OFFSET_TOO_EARLY_COUNT, this.offsetTooEarlyCount);
     state.setProp(ConfigurationKeys.OFFSET_TOO_LATE_COUNT, this.offsetTooLateCount);
     state.setProp(ConfigurationKeys.FAIL_TO_GET_OFFSET_COUNT, this.failToGetOffsetCount);
-
-    try {
-      this.closer.close();
-    } catch (IOException e) {
-      LOG.error("Failed to close kafkaWrapper", e);
-    }
   }
 
   /**

@@ -23,7 +23,7 @@ public class FlattenForkOperator implements ForkOperator<CopyableSchema, Copyabl
 	private final List<Boolean> schemas = new ArrayList<Boolean>();
 	private final List<Boolean> records = new ArrayList<Boolean>();
 
-	public static final String FLATTEN_ARRAY_COUNT = "schemaflattener.arraycount";
+	public static final String FLATTEN_ARRAY_COUNT = "stun.schemaflattener.arraycount";
 
 	private int arrayCount;
 

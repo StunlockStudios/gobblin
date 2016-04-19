@@ -14,7 +14,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 
 public class ConfluentSchemaRegistry extends KafkaSchemaRegistry<Integer, Schema>
 {
-
 	private static final Logger LOG = LoggerFactory.getLogger(ConfluentSchemaRegistry.class);
 	private final CachedSchemaRegistryClient schemaRegistry;
 
@@ -40,12 +39,12 @@ public class ConfluentSchemaRegistry extends KafkaSchemaRegistry<Integer, Schema
 		}
 		catch (IOException e)
 		{
-			LOG.error("fetchSchemaByKey - Got exception", e);
+			LOG.error("fetchSchemaByKey(" + key + ") - Got exception", e);
 			throw new SchemaRegistryException(e);
 		}
 		catch (RestClientException e)
 		{
-			LOG.error("fetchSchemaByKey - Got exception", e);
+			LOG.error("fetchSchemaByKey(" + key + ") - Got exception", e);
 			throw new SchemaRegistryException(e);
 		}
 	}
@@ -59,12 +58,12 @@ public class ConfluentSchemaRegistry extends KafkaSchemaRegistry<Integer, Schema
 		}
 		catch (IOException e)
 		{
-			LOG.error("getLatestSchemaByTopic - Got exception", e);
+			LOG.error("getLatestSchemaByTopic(" + topic + ") - Got exception", e);
 			throw new SchemaRegistryException(e);
 		}
 		catch (RestClientException e)
 		{
-			LOG.error("getLatestSchemaByTopic - Got exception", e);
+			LOG.error("getLatestSchemaByTopic(" + topic + ") - Got exception", e);
 			throw new SchemaRegistryException(e);
 		}
 	}

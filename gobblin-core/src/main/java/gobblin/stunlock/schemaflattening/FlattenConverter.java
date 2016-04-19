@@ -28,8 +28,8 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 public class FlattenConverter extends AvroToAvroConverterBase
 {
 	private static final Logger LOG = LoggerFactory.getLogger(FlattenConverter.class);
-	public static final String FLATTEN_ARRAY_NAME = "schemaflattener.array.name";
-	public static final String FLATTEN_ARRAY_OUTPUTSCHEMA = "schemaflattener.output.schemaname";
+	public static final String FLATTEN_ARRAY_NAME = "stun.schemaflattener.array.name";
+	public static final String FLATTEN_ARRAY_OUTPUTSCHEMA = "stun.schemaflattener.output.schemaname";
 
 	@Override
 	public Schema convertSchema(Schema inputSchema, WorkUnitState workUnit) throws SchemaConversionException

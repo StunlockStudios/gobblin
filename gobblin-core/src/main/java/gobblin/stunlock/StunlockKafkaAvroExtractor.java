@@ -14,7 +14,8 @@ public class StunlockKafkaAvroExtractor extends KafkaAvroExtractor<Integer>
 {
 	private static final Logger LOG = LoggerFactory.getLogger(StunlockKafkaAvroExtractor.class);
 
-	private static final byte MAGIC_BYTE = (byte) 0xFF;
+	private static final byte MAGIC_BYTExFF = (byte) 0xFF;
+	private static final byte MAGIC_BYTEx00 = (byte) 0x00; 
 
 	public StunlockKafkaAvroExtractor(WorkUnitState state)
 	{
@@ -32,18 +33,24 @@ public class StunlockKafkaAvroExtractor extends KafkaAvroExtractor<Integer>
 	@Override
 	protected Schema getRecordSchema(byte[] payload)
 	{
+		int schemaId;
 		//LOG.info("StunlockKafkaAvroExtractor getRecordSchema");
-		if (payload[0] != MAGIC_BYTE)
+		if (payload[0] == MAGIC_BYTExFF)
+			schemaId = byteArrayToInt(payload, 1);
+		else if(payload[0] == MAGIC_BYTEx00)
+			schemaId = byteArrayToIntBigEndian(payload, 1);
+		else
 		{
+			LOG.warn("StunlockKafkaAvroExtractor.getRecordSchema() - Payload didn't contain the magic byte.");
 			return null;
 		}
-
-		int schemaId = byteArrayToInt(payload, 1);
+		
 		try
 		{
 			Schema schema = super.schemaRegistry.get().getSchemaByKey(schemaId);
 			if (schema == null)
 			{
+				LOG.warn("StunlockKafkaAvroExtractor.getRecordSchema() - Couldn't get record schema with key " + schemaId);
 				return null;
 			}
 			return schema;
@@ -59,5 +66,9 @@ public class StunlockKafkaAvroExtractor extends KafkaAvroExtractor<Integer>
 	{
 		return b[0 + index] & 0xFF | (b[1 + index] & 0xFF) << 8 | (b[2 + index] & 0xFF) << 16 | (b[3 + index] & 0xFF) << 24;
 	}
-
+	
+	 private static int byteArrayToIntBigEndian(byte[] b, int index)
+	 {
+	  return b[3 + index] & 0xFF | (b[2 + index] & 0xFF) << 8 | (b[1 + index] & 0xFF) << 16 | (b[0 + index] & 0xFF) << 24;
+	 }
 }

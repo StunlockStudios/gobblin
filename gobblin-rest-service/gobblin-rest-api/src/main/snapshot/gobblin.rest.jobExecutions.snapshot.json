@@ -228,6 +228,7 @@
     "type" : "enum",
     "name" : "QueryListType",
     "namespace" : "gobblin.rest",
+    "doc" : "Listing distinct jobs fetches the most recent execution info for each job name in the database. Listing recent jobs fetches the most recent job executions, regardless of job name.",
     "symbols" : [ "DISTINCT", "RECENT" ]
   }, {
     "type" : "enum",
@@ -322,7 +323,7 @@
     "path" : "/jobExecutions",
     "name" : "jobExecutions",
     "namespace" : "gobblin.rest",
-    "doc" : "A Rest.li resource for serving queries of Gobblin job executions.\n\ngenerated from: gobblin.rest.JobExecutionInfoResource",
+    "doc" : "generated from: gobblin.rest.JobExecutionInfoResource",
     "collection" : {
       "identifier" : {
         "name" : "jobExecutionsId",

@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.io.Closer;
 
+import gobblin.configuration.ConfigurationKeys;
 import gobblin.configuration.State;
 import gobblin.configuration.WorkUnitState;
 import gobblin.publisher.BaseDataPublisher;
@@ -59,15 +60,15 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher
 	private static final String ALTER_TABLE_QUERY = 
 			"ALTER TABLE %1$s " + 
 			"ADD IF NOT EXISTS " + 
-			"PARTITION (date_and_hour='%2$s')";
+			"PARTITION (date_and_hour='%2$s') LOCATION '%3$s'";
 
 	private static final String REFRESH_TABLE_QUERY = 
 			"MSCK REPAIR TABLE %1$s";
 	
-	private static final String PUBLISHER_SCHEMANAME = "writer.partitioner.schemaname";
-	private static final String HIVE_URL = "stunpublisher.hive.url";
-	private static final String HIVE_USER = "stunpublisher.hive.user";
-	private static final String HIVE_PASSWORD = "stunpublisher.hive.password";
+	private static final String PUBLISHER_SCHEMANAME = "stun.writer.partitioner.schemaname";
+	private static final String HIVE_URL = "stun.publisher.hive.url";
+	private static final String HIVE_USER = "stun.publisher.hive.user";
+	private static final String HIVE_PASSWORD = "stun.publisher.hive.password";
 	// @formatter:on
 
 	public StunlockPartitionedHiveDataPublisher(State state) throws IOException
@@ -101,21 +102,30 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher
 		Closer closer = Closer.create();
 		try
 		{
-			String outputSchemaName = GetProperty(state, branchId, PUBLISHER_SCHEMANAME);
+			String outputSchemaName = null;
+			if (PropertyExists(state, branchId, PUBLISHER_SCHEMANAME))
+				outputSchemaName = GetProperty(state, branchId, PUBLISHER_SCHEMANAME);
+			else
+				outputSchemaName = state.getProp(ConfigurationKeys.EXTRACT_TABLE_NAME_KEY);
 
 			Path filePath = new Path(pathStr);
 			Path dateHourFolder = filePath.getParent();
-			Path schemaIdFolder = dateHourFolder.getParent();
-			Path hdfsDataBaseFolder = schemaIdFolder.getParent();
+			Path dateDayFolder = dateHourFolder.getParent();
+			Path dateMonthFolder = dateDayFolder.getParent();
+			Path dateYearFolder = dateMonthFolder.getParent();
+			String fullDatePartitionFolderName = dateYearFolder.getName() + "/" + dateMonthFolder.getName() + "/" + dateDayFolder.getName() + "/" + dateHourFolder.getName();
+
+			Path schemaNameAndIdFolder = dateYearFolder.getParent();
+			Path hdfsDataBaseFolder = schemaNameAndIdFolder.getParent();
 
 			String schemaIdFolderPrefix = outputSchemaName + "_";
-			String schemaIdStr = schemaIdFolder.getName();
-			if (schemaIdStr.startsWith(schemaIdFolderPrefix) == false)
+			String schemaNameAndIdFolderStr = schemaNameAndIdFolder.getName();
+			if (schemaNameAndIdFolderStr.startsWith(schemaIdFolderPrefix) == false)
 			{
 				LOG.error("Path does not match expected format. No folder for schema id partitions in " + pathStr);
 				return;
 			}
-			schemaIdStr = schemaIdStr.substring(schemaIdFolderPrefix.length());
+			String schemaIdStr = schemaNameAndIdFolderStr.substring(schemaIdFolderPrefix.length());
 
 			// @formatter:off
 			// [DONE?] Need to partition by SchemaID as well as DateHour?
@@ -126,12 +136,11 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher
 
 			// Register in HIVE?
 			String hdfsBaseUrl = hdfsDataBaseFolder.toString();
-			String partitionDateAndHour = dateHourFolder.getName();
 			int schemaID = Integer.parseInt(schemaIdStr);
 
 			String schemaRegistryBaseUrl = GetSchemaRegistryBaseUrl(state);
-			String schemaURL = schemaRegistryBaseUrl + "/schemas/ids/" + schemaID;
-			String tableName = schemaIdFolder.getName(); // I have a vague
+			String schemaURL = schemaRegistryBaseUrl + "/schemas/ids/plain/" + schemaID;
+			String tableName = schemaNameAndIdFolderStr; // I have a vague
 															// memory that the
 															// tableName needed
 															// to be the same as
@@ -145,7 +154,7 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher
 			String hdfsTableRootLocation = hdfsBaseUrl + Path.SEPARATOR + tableName;
 
 			String createTableStmt = String.format(CREATE_TABLE_QUERY, tableName, hdfsTableRootLocation, schemaURL);
-			String alterTableStmt = String.format(ALTER_TABLE_QUERY, tableName, partitionDateAndHour);
+			String alterTableStmt = String.format(ALTER_TABLE_QUERY, tableName, fullDatePartitionFolderName, fullDatePartitionFolderName);
 			String refreshTableStmt = String.format(REFRESH_TABLE_QUERY, tableName);
 
 			LOG.info("Time to register, Q1: " + createTableStmt);
@@ -182,14 +191,28 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher
 		return state.getProp(ConfluentSchemaRegistry.SCHEMA_REGISTRY_URL);
 	}
 
+	private Boolean PropertyExists(WorkUnitState state, int branchId, String propertyName)
+	{
+		if(state.contains(ForkOperatorUtils.getPropertyNameForBranch(propertyName, branchId)))
+			return true;
+		
+		else if(state.contains(propertyName))
+			return true;
+		
+		return false;
+	}
+
 	private String GetProperty(WorkUnitState state, int branchId, String propertyName)
 	{
 		String prop = ForkOperatorUtils.getPropertyNameForBranch(propertyName, branchId);
-		if (state.contains(prop) == false)
-		{
-			LOG.error("EXPECTED ARRAY NAME PROPERTY '" + prop + "' NOT SET!");
-		}
 
-		return state.getProp(prop);
+		if (state.contains(prop))
+			return state.getProp(prop);
+		
+		if (state.contains(propertyName))
+			return state.getProp(propertyName);
+
+		LOG.error("EXPECTED PROPERTY '" + prop + "' NOT SET, NEITHER IN BRANCH " + branchId + " NOR AS UNBRANCHED SETTING!");
+		return null;
 	}
 }
