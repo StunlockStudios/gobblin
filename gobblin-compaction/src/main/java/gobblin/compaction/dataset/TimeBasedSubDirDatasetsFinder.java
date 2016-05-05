@@ -26,7 +26,6 @@ import org.joda.time.format.DateTimeFormatter;
 import org.joda.time.format.PeriodFormatter;
 import org.joda.time.format.PeriodFormatterBuilder;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 
 import gobblin.compaction.mapreduce.MRCompactor;
@@ -82,15 +81,15 @@ public class TimeBasedSubDirDatasetsFinder extends DatasetsFinder {
     this.destSubDir = getDestSubDir();
     this.destLateSubDir = getDestLateSubDir();
     this.folderTimePattern = getFolderPattern();
-    this.timeZone =
-        DateTimeZone
-            .forID(this.state.getProp(MRCompactor.COMPACTION_TIMEZONE, MRCompactor.DEFAULT_COMPACTION_TIMEZONE));
+    this.timeZone = DateTimeZone
+        .forID(this.state.getProp(MRCompactor.COMPACTION_TIMEZONE, MRCompactor.DEFAULT_COMPACTION_TIMEZONE));
     this.timeFormatter = DateTimeFormat.forPattern(this.folderTimePattern).withZone(this.timeZone);
   }
 
   /**
    * Each subdir in {@link DatasetsFinder#inputDir} is considered a dataset, if it satisfies blacklist and whitelist.
    */
+  @SuppressWarnings("deprecation")
   @Override
   public Set<Dataset> findDistinctDatasets() throws IOException {
     Set<Dataset> datasets = Sets.newHashSet();
@@ -124,13 +123,12 @@ public class TimeBasedSubDirDatasetsFinder extends DatasetsFinder {
               Path jobOutputLatePath = appendFolderTime(outputLatePath, folderTime);
               Path jobOutputTmpPath = appendFolderTime(outputTmpPath, folderTime);
 
-              Dataset timeBasedDataset =
-                  new Dataset.Builder().withPriority(priority)
-                      .withLateDataThresholdForRecompact(lateDataThresholdForRecompact)
-                      .withInputPath(this.recompactDatasets ? jobOutputPath : jobInputPath)
-                      .withInputLatePath(this.recompactDatasets ? jobOutputLatePath : jobInputLatePath)
-                      .withOutputPath(jobOutputPath).withOutputLatePath(jobOutputLatePath)
-                      .withOutputTmpPath(jobOutputTmpPath).build();
+              Dataset timeBasedDataset = new Dataset.Builder().withPriority(priority)
+                  .withLateDataThresholdForRecompact(lateDataThresholdForRecompact)
+                  .withInputPath(this.recompactDatasets ? jobOutputPath : jobInputPath)
+                  .withInputLatePath(this.recompactDatasets ? jobOutputLatePath : jobInputLatePath)
+                  .withOutputPath(jobOutputPath).withOutputLatePath(jobOutputLatePath)
+                  .withOutputTmpPath(jobOutputTmpPath).build();
               // Stores the extra information for timeBasedDataset
               timeBasedDataset.setJobProp(MRCompactor.COMPACTION_JOB_DEST_PARTITION,
                   folderTime.toString(this.timeFormatter));
@@ -201,7 +199,7 @@ public class TimeBasedSubDirDatasetsFinder extends DatasetsFinder {
     }
   }
 
-  private PeriodFormatter getPeriodFormatter() {
+  private static PeriodFormatter getPeriodFormatter() {
     return new PeriodFormatterBuilder().appendMonths().appendSuffix("m").appendDays().appendSuffix("d").appendHours()
         .appendSuffix("h").toFormatter();
   }

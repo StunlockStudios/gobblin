@@ -19,7 +19,6 @@ dependencies {
   compile project(":gobblin-metastore")
   compile project(":gobblin-runtime")
   compile project(":gobblin-utility")
-  compile project(":gobblin-scheduler")
   compile project(path: ':gobblin-rest-service:gobblin-rest-api', configuration: 'restClient')
   compile project(":gobblin-rest-service:gobblin-rest-server")
 
@@ -44,7 +43,7 @@ dependencies {
   compile externalDependency.hadoopYarnApi
   compile externalDependency.hadoopYarnCommon
   compile externalDependency.hadoopYarnClient
-  if (project.hasProperty('useHadoop2')) {
+  if (useHadoop2) {
     compile externalDependency.avroMapredH2
   } else {
     compile externalDependency.avroMapredH1

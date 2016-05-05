@@ -55,6 +55,10 @@ public abstract class HiveRegister implements Closeable {
 
   public static final String HIVE_REGISTER_TYPE = "hive.register.type";
   public static final String DEFAULT_HIVE_REGISTER_TYPE = "gobblin.hive.metastore.HiveMetaStoreBasedRegister";
+  public static final String HIVE_TABLE_COMPARATOR_TYPE = "hive.table.comparator.type";
+  public static final String DEFAULT_HIVE_TABLE_COMPARATOR_TYPE = HiveTableComparator.class.getName();
+  public static final String HIVE_PARTITION_COMPARATOR_TYPE = "hive.partition.comparator.type";
+  public static final String DEFAULT_HIVE_PARTITION_COMPARATOR_TYPE = HivePartitionComparator.class.getName();
 
   protected static final String HIVE_DB_EXTENSION = ".db";
 
@@ -65,7 +69,7 @@ public abstract class HiveRegister implements Closeable {
   protected final ListeningExecutorService executor;
   protected final List<Future<Void>> futures = Lists.newArrayList();
 
-  protected HiveRegister(State state) throws IOException {
+  protected HiveRegister(State state) {
     this.props = new HiveRegProps(state);
     this.hiveDbRootDir = this.props.getDbRootDir();
     this.executor = MoreExecutors.listeningDecorator(
@@ -81,7 +85,7 @@ public abstract class HiveRegister implements Closeable {
    *
    * @return a {@link ListenableFuture} for the process of registering the given {@link HiveSpec}.
    */
-  public ListenableFuture<Void> register(final HiveSpec spec) throws IOException {
+  public ListenableFuture<Void> register(final HiveSpec spec) {
     ListenableFuture<Void> future = this.executor.submit(new Callable<Void>() {
 
       @Override
@@ -270,6 +274,38 @@ public abstract class HiveRegister implements Closeable {
     }
   }
 
+  protected HiveRegistrationUnitComparator<?> getTableComparator(HiveTable existingTable, HiveTable newTable) {
+    try {
+      Class<?> clazz =
+          Class.forName(this.props.getProp(HIVE_TABLE_COMPARATOR_TYPE, DEFAULT_HIVE_TABLE_COMPARATOR_TYPE));
+      return (HiveRegistrationUnitComparator<?>) ConstructorUtils.invokeConstructor(clazz, existingTable, newTable);
+    } catch (ReflectiveOperationException e) {
+      log.error("Unable to instantiate Hive table comparator", e);
+      throw Throwables.propagate(e);
+    }
+  }
+
+  protected boolean needToUpdateTable(HiveTable existingTable, HiveTable newTable) {
+    return getTableComparator(existingTable, newTable).compareAll().result();
+  }
+
+  protected HiveRegistrationUnitComparator<?> getPartitionComparator(HivePartition existingPartition,
+      HivePartition newPartition) {
+    try {
+      Class<?> clazz =
+          Class.forName(this.props.getProp(HIVE_PARTITION_COMPARATOR_TYPE, DEFAULT_HIVE_PARTITION_COMPARATOR_TYPE));
+      return (HiveRegistrationUnitComparator<?>) ConstructorUtils.invokeConstructor(clazz, existingPartition,
+          newPartition);
+    } catch (ReflectiveOperationException e) {
+      log.error("Unable to instantiate Hive partition comparator", e);
+      throw Throwables.propagate(e);
+    }
+  }
+
+  protected boolean needToUpdatePartition(HivePartition existingPartition, HivePartition newPartition) {
+    return getPartitionComparator(existingPartition, newPartition).compareAll().result();
+  }
+
   /**
    * Wait till all registration requested submitted via {@link #register(HiveSpec)} to finish.
    *
@@ -298,7 +334,7 @@ public abstract class HiveRegister implements Closeable {
    * will be returned. This {@link State} object is also used to instantiate the {@link HiveRegister} object.
    */
   public static HiveRegister get(State props) {
-    return get(props, Optional.<String>absent());
+    return get(props, Optional.<String> absent());
   }
 
   /**

@@ -37,15 +37,16 @@ public class HdfsReader extends HdfsIO {
   }
 
   public InputStream getInputStream() throws IOException {
-    return this.fileSystem.open(new Path(filePathInHdfs));
+    return this.fileSystem.open(new Path(this.filePathInHdfs));
   }
 
   public FsInput getFsInput() throws IOException {
-    Path path = new Path(filePathInHdfs);
+    Path path = new Path(this.filePathInHdfs);
     Configuration conf = getConfiguration();
     return new FsInput(path, conf);
   }
 
+  @SuppressWarnings("deprecation")
   public static String getFirstDataFilePathInDir(String dirInHdfs) throws IOException {
     FileStatus[] fileStatuses = getFileSystem().listStatus(new Path(dirInHdfs));
     for (FileStatus fileStatus : fileStatuses) {

@@ -38,12 +38,17 @@ import lombok.Getter;
 @Alpha
 public class HivePartition extends HiveRegistrationUnit {
 
+  private final List<String> values;
+
   private HivePartition(Builder builder) {
     super(builder);
     this.values = ImmutableList.<String> copyOf(builder.values);
   }
 
-  private List<String> values;
+  @Override
+  public String toString() {
+    return this.values.toString();
+  }
 
   public static class Builder extends HiveRegistrationUnit.Builder<Builder> {
 

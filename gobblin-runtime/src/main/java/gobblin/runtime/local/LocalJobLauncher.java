@@ -13,15 +13,11 @@
 package gobblin.runtime.local;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,12 +26,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ServiceManager;
 
-import gobblin.configuration.ConfigurationKeys;
 import gobblin.metrics.Tag;
 import gobblin.metrics.event.TimingEvent;
 import gobblin.runtime.AbstractJobLauncher;
-import gobblin.runtime.FileBasedJobLock;
-import gobblin.runtime.JobLock;
 import gobblin.runtime.JobState;
 import gobblin.runtime.TaskExecutor;
 import gobblin.runtime.TaskStateTracker;
@@ -64,7 +57,7 @@ public class LocalJobLauncher extends AbstractJobLauncher {
   private volatile CountDownLatch countDownLatch;
 
   public LocalJobLauncher(Properties jobProps) throws Exception {
-    super(jobProps, ImmutableList.<Tag<?>>of());
+    super(jobProps, ImmutableList.<Tag<?>> of());
 
     TimingEvent jobLocalSetupTimer = this.eventSubmitter.getTimingEvent(TimingEventNames.RunJobTimings.JOB_LOCAL_SETUP);
 
@@ -117,8 +110,8 @@ public class LocalJobLauncher extends AbstractJobLauncher {
     TimingEvent workUnitsRunTimer = this.eventSubmitter.getTimingEvent(TimingEventNames.RunJobTimings.WORK_UNITS_RUN);
 
     this.countDownLatch = new CountDownLatch(workUnitsToRun.size());
-    AbstractJobLauncher.runWorkUnits(this.jobContext.getJobId(), workUnitsToRun, this.taskStateTracker,
-        this.taskExecutor, this.countDownLatch);
+    AbstractJobLauncher.runWorkUnits(this.jobContext.getJobId(), this.jobContext.getJobState(), workUnitsToRun,
+        this.taskStateTracker, this.taskExecutor, this.countDownLatch);
 
     LOG.info(String.format("Waiting for submitted tasks of job %s to complete...", jobId));
     while (!this.countDownLatch.await(1, TimeUnit.MINUTES)) {
@@ -142,13 +135,6 @@ public class LocalJobLauncher extends AbstractJobLauncher {
     if (jobState.getState() == JobState.RunningState.RUNNING) {
       jobState.setState(JobState.RunningState.SUCCESSFUL);
     }
-  }
-
-  @Override
-  protected JobLock getJobLock() throws IOException {
-    URI fsUri = URI.create(this.jobProps.getProperty(ConfigurationKeys.FS_URI_KEY, ConfigurationKeys.LOCAL_FS_URI));
-    return new FileBasedJobLock(FileSystem.get(fsUri, new Configuration()),
-        this.jobProps.getProperty(ConfigurationKeys.JOB_LOCK_DIR_KEY), this.jobContext.getJobName());
   }
 
   @Override

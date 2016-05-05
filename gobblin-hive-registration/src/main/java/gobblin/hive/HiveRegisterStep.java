@@ -12,6 +12,7 @@
 
 package gobblin.hive;
 
+import java.util.Arrays;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -22,7 +23,6 @@ import com.google.common.base.Optional;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import gobblin.commit.CommitStep;
-import gobblin.hive.metastore.HiveMetaStoreBasedRegister;
 import gobblin.hive.spec.HiveSpec;
 
 
@@ -37,20 +37,32 @@ public class HiveRegisterStep implements CommitStep {
   private final HiveSpec hiveSpec;
   private final HiveRegProps props;
 
-  @Override public boolean isCompleted() throws IOException {
+  @Override
+  public boolean isCompleted() throws IOException {
     // TODO: this is complicated due to preactivities, postactivities, etc. but unnecessary for now because exactly once
     // is not enabled.
     return false;
   }
 
-  @Override public void execute() throws IOException {
-    HiveRegister hiveRegister = HiveRegister.get(this.props, this.metastoreURI);
-    log.info("Registering Hive Spec " + this.hiveSpec);
-    ListenableFuture<Void> future = hiveRegister.register(this.hiveSpec);
-    try {
+  @Override
+  public void execute() throws IOException {
+    try (HiveRegister hiveRegister = HiveRegister.get(this.props, this.metastoreURI)) {
+      log.info("Registering Hive Spec " + this.hiveSpec);
+      ListenableFuture<Void> future = hiveRegister.register(this.hiveSpec);
       future.get();
     } catch (InterruptedException | ExecutionException ie) {
       throw new IOException("Hive registration was interrupted.", ie);
     }
+  }
+
+  @Override
+  public String toString() {
+    String table = this.hiveSpec.getTable().getDbName() + "." + this.hiveSpec.getTable().getTableName();
+    String partitionInfo = this.hiveSpec.getPartition().isPresent()
+        ? " partition " + Arrays.toString(this.hiveSpec.getPartition().get().getValues().toArray()) : "";
+    String location = this.hiveSpec.getPartition().isPresent() ? this.hiveSpec.getPartition().get().getLocation().get()
+        : this.hiveSpec.getTable().getLocation().get();
+    return String.format("Register %s%s with location %s in Hive metastore %s.", table, partitionInfo, location,
+        this.metastoreURI.isPresent() ? this.metastoreURI.get() : "default");
   }
 }

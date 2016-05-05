@@ -15,7 +15,6 @@ package gobblin.hive;
 import lombok.Getter;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Callable;
@@ -52,7 +51,8 @@ public class HiveMetastoreClientPool {
 
   private static final Cache<Optional<String>, HiveMetastoreClientPool> poolCache =
       CacheBuilder.newBuilder().removalListener(new RemovalListener<Optional<String>, HiveMetastoreClientPool>() {
-        @Override public void onRemoval(RemovalNotification<Optional<String>, HiveMetastoreClientPool> notification) {
+        @Override
+        public void onRemoval(RemovalNotification<Optional<String>, HiveMetastoreClientPool> notification) {
           if (notification.getValue() != null) {
             notification.getValue().close();
           }
@@ -73,7 +73,8 @@ public class HiveMetastoreClientPool {
       throws IOException {
     try {
       return poolCache.get(metastoreURI, new Callable<HiveMetastoreClientPool>() {
-        @Override public HiveMetastoreClientPool call() throws Exception {
+        @Override
+        public HiveMetastoreClientPool call() throws Exception {
           return new HiveMetastoreClientPool(properties, metastoreURI);
         }
       });
@@ -88,7 +89,7 @@ public class HiveMetastoreClientPool {
    *             different pool configurations are required.
    */
   @Deprecated
-  public HiveMetastoreClientPool(Properties properties, Optional<String> metastoreURI) throws IOException {
+  public HiveMetastoreClientPool(Properties properties, Optional<String> metastoreURI) {
     this.hiveRegProps = new HiveRegProps(new State(properties));
     GenericObjectPoolConfig config = new GenericObjectPoolConfig();
     config.setMaxTotal(this.hiveRegProps.getNumThreads());
@@ -132,8 +133,9 @@ public class HiveMetastoreClientPool {
       }
       for (Map.Entry<HiveMetastoreClientPool, Integer> entry : requiredClientsPerPool.entrySet()) {
         if (entry.getKey().pool.getMaxTotal() < entry.getValue()) {
-          throw new IOException(String.format("Not enough clients available in the pool. Required %d, max available %d.",
-              entry.getValue(), entry.getKey().pool.getMaxTotal()));
+          throw new IOException(
+              String.format("Not enough clients available in the pool. Required %d, max available %d.",
+                  entry.getValue(), entry.getKey().pool.getMaxTotal()));
         }
       }
       for (Map.Entry<String, HiveMetastoreClientPool> entry : namedPools.entrySet()) {
@@ -152,7 +154,8 @@ public class HiveMetastoreClientPool {
       return this.clients.get(name).get();
     }
 
-    @Override public void close() throws IOException {
+    @Override
+    public void close() throws IOException {
       this.closer.close();
     }
   }

@@ -47,8 +47,7 @@ public class HiveMetaStoreUtils {
   private static final TableType DEFAULT_TABLE_TYPE = TableType.EXTERNAL_TABLE;
   private static final String EXTERNAL = "EXTERNAL";
 
-  private HiveMetaStoreUtils() {
-  }
+  private HiveMetaStoreUtils() {}
 
   /**
    * Convert a {@link HiveTable} into a {@link Table}.
@@ -77,7 +76,7 @@ public class HiveMetaStoreUtils {
       table.setTableType(DEFAULT_TABLE_TYPE.toString());
     }
     if (table.getTableType() == TableType.EXTERNAL_TABLE.toString()) {
-      table.getParameters().put(EXTERNAL, Boolean.TRUE.toString());
+      table.getParameters().put(EXTERNAL, Boolean.TRUE.toString().toUpperCase());
     }
     table.setPartitionKeys(getFieldSchemas(hiveTable.getPartitionKeys()));
     table.setSd(getStorageDescriptor(hiveTable));
@@ -94,8 +93,11 @@ public class HiveMetaStoreUtils {
     HiveTable hiveTable = new HiveTable.Builder().withDbName(table.getDbName()).withTableName(table.getTableName())
         .withPartitionKeys(getColumns(table.getPartitionKeys())).withProps(tableProps).withStorageProps(storageProps)
         .withSerdeProps(serDeProps).build();
-    if (!table.getSd().getCols().isEmpty()) {
+    if (table.getSd().getCols() != null) {
       hiveTable.setColumns(getColumns(table.getSd().getCols()));
+    }
+    if (table.getSd().getBucketCols() != null) {
+      hiveTable.setBucketColumns(table.getSd().getBucketCols());
     }
     return hiveTable;
   }
@@ -130,8 +132,11 @@ public class HiveMetaStoreUtils {
     HivePartition hivePartition = new HivePartition.Builder().withDbName(partition.getDbName())
         .withTableName(partition.getTableName()).withPartitionValues(partition.getValues()).withProps(partitionProps)
         .withStorageProps(storageProps).withSerdeProps(serDeProps).build();
-    if (!partition.getSd().getCols().isEmpty()) {
+    if (partition.getSd().getCols() != null) {
       hivePartition.setColumns(getColumns(partition.getSd().getCols()));
+    }
+    if (partition.getSd().getBucketCols() != null) {
+      hivePartition.setBucketColumns(partition.getSd().getBucketCols());
     }
     return hivePartition;
   }

@@ -32,16 +32,17 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
 import gobblin.data.management.retention.DatasetCleaner;
-import gobblin.data.management.retention.dataset.finder.DatasetFinder;
 import gobblin.dataset.Dataset;
+import gobblin.dataset.DatasetsFinder;
+import gobblin.util.ConfigUtils;
 import gobblin.util.PathUtils;
 
 
 /**
- * A configurable {@link gobblin.data.management.retention.dataset.finder.DatasetFinder} that looks for
+ * A configurable {@link DatasetsFinder} that looks for
  * {@link gobblin.data.management.retention.dataset.CleanableDataset}s using a glob pattern.
  */
-public abstract class ConfigurableGlobDatasetFinder<T extends Dataset> implements DatasetFinder<T> {
+public abstract class ConfigurableGlobDatasetFinder<T extends Dataset> implements DatasetsFinder<T> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConfigurableGlobDatasetFinder.class);
 
@@ -68,11 +69,13 @@ public abstract class ConfigurableGlobDatasetFinder<T extends Dataset> implement
 
   public ConfigurableGlobDatasetFinder(FileSystem fs, Properties jobProps, Config config) throws IOException {
     for (String property : requiredProperties()) {
-      Preconditions.checkArgument(config.hasPath(property) || config.hasPath(DEPRECATIONS.get(property)));
+      Preconditions.checkArgument(config.hasPath(property) || config.hasPath(DEPRECATIONS.get(property)), String.format("Missing required property %s", property));
     }
 
-    if (config.hasPath(DATASET_BLACKLIST_KEY)) {
+    if (ConfigUtils.hasNonEmptyPath(config, DATASET_BLACKLIST_KEY)) {
       this.blacklist = Optional.of(Pattern.compile(config.getString(DATASET_BLACKLIST_KEY)));
+    } else if (ConfigUtils.hasNonEmptyPath(config, DATASET_FINDER_BLACKLIST_KEY)) {
+      this.blacklist = Optional.of(Pattern.compile(config.getString(DATASET_FINDER_BLACKLIST_KEY)));
     } else {
       this.blacklist = Optional.absent();
     }
@@ -80,7 +83,7 @@ public abstract class ConfigurableGlobDatasetFinder<T extends Dataset> implement
     this.fs = fs;
 
     Path tmpDatasetPattern;
-    if (config.getString(DATASET_FINDER_PATTERN_KEY) != null) {
+    if (config.hasPath(DATASET_FINDER_PATTERN_KEY)) {
       tmpDatasetPattern = new Path(config.getString(DATASET_FINDER_PATTERN_KEY));
     } else {
       tmpDatasetPattern = new Path(config.getString(DATASET_PATTERN_KEY));
@@ -114,13 +117,18 @@ public abstract class ConfigurableGlobDatasetFinder<T extends Dataset> implement
   @Override
   public List<T> findDatasets() throws IOException {
     List<T> datasets = Lists.newArrayList();
-    for (FileStatus fileStatus : this.fs.globStatus(datasetPattern)) {
-      Path pathToMatch = PathUtils.getPathWithoutSchemeAndAuthority(fileStatus.getPath());
-      if (this.blacklist.isPresent() && this.blacklist.get().matcher(pathToMatch.toString()).find()) {
-        continue;
+    LOG.info("Finding datasets for pattern " + this.datasetPattern);
+
+    FileStatus[] fileStatuss = this.fs.globStatus(this.datasetPattern);
+    if (fileStatuss != null) {
+      for (FileStatus fileStatus : fileStatuss) {
+        Path pathToMatch = PathUtils.getPathWithoutSchemeAndAuthority(fileStatus.getPath());
+        if (this.blacklist.isPresent() && this.blacklist.get().matcher(pathToMatch.toString()).find()) {
+          continue;
+        }
+        LOG.info("Found dataset at " + fileStatus.getPath());
+        datasets.add(datasetAtPath(PathUtils.getPathWithoutSchemeAndAuthority(fileStatus.getPath())));
       }
-      LOG.info("Found dataset at " + fileStatus.getPath());
-      datasets.add(datasetAtPath(PathUtils.getPathWithoutSchemeAndAuthority(fileStatus.getPath())));
     }
     return datasets;
   }
@@ -140,4 +148,5 @@ public abstract class ConfigurableGlobDatasetFinder<T extends Dataset> implement
    * @throws IOException
    */
   public abstract T datasetAtPath(Path path) throws IOException;
+
 }

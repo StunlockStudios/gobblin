@@ -33,6 +33,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
+import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -102,7 +103,7 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
    * <p>
    *   The "topic.name" field also allows regular expressions. For example, one can specify key, value
    *   "topic.name" : "myTopic.*". In this case all topics whose name matches the pattern "myTopic.*" will have all the
-   *   specified config properties added to their {@link WorkUnit}s. If more a topic matches multiple "topic.name"s then
+   *   specified config properties added to their {@link WorkUnit}s. If more than one topic matches multiple "topic.name"s then
    *   the properties from all the {@link JsonObject}s will be added to their {@link WorkUnit}s.
    * </p>
    */
@@ -114,36 +115,40 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
 
   private final Set<KafkaPartition> partitionsToBeProcessed = Sets.newConcurrentHashSet();
 
+  private final Closer closer = Closer.create();
   private final AtomicInteger failToGetOffsetCount = new AtomicInteger(0);
   private final AtomicInteger offsetTooEarlyCount = new AtomicInteger(0);
   private final AtomicInteger offsetTooLateCount = new AtomicInteger(0);
+
+  private KafkaWrapper kafkaWrapper;
+
   private volatile boolean doneGettingAllPreviousOffsets = false;
 
   @Override
   public List<WorkUnit> getWorkunits(SourceState state) {
-    Map<String, List<WorkUnit>> workUnits = Maps.newConcurrentMap(); 
+    Map<String, List<WorkUnit>> workUnits = Maps.newConcurrentMap();
 
     Kafka0900API kafkaAPI = new Kafka0900API(state);    
     List<KafkaTopic> topics = getFilteredTopics(kafkaAPI, state);
     closeKafkaAPI(kafkaAPI);
     
     Map<String, State> topicSpecificStateMap = getTopicSpecificState(topics, state);
-    
-    int numOfThreads =
-        state.getPropAsInt(ConfigurationKeys.KAFKA_SOURCE_WORK_UNITS_CREATION_THREADS, ConfigurationKeys.KAFKA_SOURCE_WORK_UNITS_CREATION_DEFAULT_THREAD_COUNT);
-    ExecutorService threadPool = Executors.newFixedThreadPool(numOfThreads,
-        ExecutorsUtils.newThreadFactory(Optional.of(LOG)));
-    
-    long startTimeOfCreatingWorkUnits = System.currentTimeMillis();
-    LOG.info("Begin using thread pool to create work units for topic size " + topics.size());
-    
+
+    int numOfThreads = state.getPropAsInt(ConfigurationKeys.KAFKA_SOURCE_WORK_UNITS_CREATION_THREADS,
+        ConfigurationKeys.KAFKA_SOURCE_WORK_UNITS_CREATION_DEFAULT_THREAD_COUNT);
+    ExecutorService threadPool =
+        Executors.newFixedThreadPool(numOfThreads, ExecutorsUtils.newThreadFactory(Optional.of(LOG)));
+
+    Stopwatch createWorkUnitStopwatch = Stopwatch.createStarted();
+
     for (KafkaTopic topic : topics) {
-      threadPool.submit(new WorkUnitCreator(topic, state, Optional.fromNullable(topicSpecificStateMap.get(topic.getName())), workUnits));
+      threadPool.submit(new WorkUnitCreator(topic, state,
+          Optional.fromNullable(topicSpecificStateMap.get(topic.getName())), workUnits));
     }
-    
+
     ExecutorsUtils.shutdownExecutorService(threadPool, Optional.of(LOG), 1L, TimeUnit.HOURS);
-    LOG.info("Done using thread pool to create work units. Total time used for creating work units is " 
-        + (System.currentTimeMillis()-startTimeOfCreatingWorkUnits) + " milliseconds");
+    LOG.info(String.format("Created workunits for %d topics in %d seconds", workUnits.size(),
+        createWorkUnitStopwatch.elapsed(TimeUnit.SECONDS)));
 
     // Create empty WorkUnits for skipped partitions (i.e., partitions that have previous offsets,
     // but aren't processed).
@@ -159,7 +164,7 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
    * configuration information specified in the state via the key {@link #KAFKA_TOPIC_SPECIFIC_STATE}.
    */
   @VisibleForTesting
-  Map<String, State> getTopicSpecificState(List<KafkaTopic> topics, SourceState state) {
+  static Map<String, State> getTopicSpecificState(List<KafkaTopic> topics, SourceState state) {
     if (!Strings.isNullOrEmpty(state.getProp(KAFKA_TOPIC_SPECIFIC_STATE))) {
       Map<String, State> topicSpecificConfigMap = Maps.newHashMap();
 
@@ -215,7 +220,7 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
 
     // in case the previous offset not been set
     getAllPreviousOffsets(state);
-    
+
     // For each partition that has a previous offset, create an empty WorkUnit for it if
     // it is not in this.partitionsToBeProcessed.
     for (Map.Entry<KafkaPartition, Long> entry : this.previousOffsets.entrySet()) {
@@ -278,7 +283,7 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
   }
 
   @SuppressWarnings("deprecation")
-  private void skipWorkUnit(WorkUnit workUnit) {
+  private static void skipWorkUnit(WorkUnit workUnit) {
     workUnit.setProp(ConfigurationKeys.WORK_UNIT_HIGH_WATER_MARK_KEY, workUnit.getLowWaterMark());
   }
 
@@ -373,9 +378,8 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
     return getWorkUnitForTopicPartition(partition, offsets, topicSpecificState);
   }
 
-
   private long getPreviousOffsetForPartition(KafkaPartition partition, SourceState state)
-      throws PreviousOffsetNotFoundException {    
+      throws PreviousOffsetNotFoundException {
 
     getAllPreviousOffsets(state);
 
@@ -388,10 +392,10 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
 
   // need to be synchronized as this.previousOffsets need to be initialized once
   private synchronized void getAllPreviousOffsets(SourceState state) {
-    if(this.doneGettingAllPreviousOffsets){
+    if (this.doneGettingAllPreviousOffsets) {
       return;
     }
-    
+
     this.previousOffsets.clear();
     for (WorkUnitState workUnitState : state.getPreviousWorkUnitStates()) {
       List<KafkaPartition> partitions = KafkaUtils.getPartitions(workUnitState);
@@ -404,11 +408,11 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
         }
       }
     }
-    
+
     this.doneGettingAllPreviousOffsets = true;
   }
 
-  private MultiLongWatermark getWatermark(WorkUnitState workUnitState) {
+  private static MultiLongWatermark getWatermark(WorkUnitState workUnitState) {
     if (workUnitState.getActualHighWatermark() != null) {
       return GSON.fromJson(workUnitState.getActualHighWatermark(), MultiLongWatermark.class);
     } else if (workUnitState.getWorkunit().getLowWatermark() != null) {
@@ -420,7 +424,7 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
 
   /**
    * A topic can be configured to move to the latest offset in {@link #TOPICS_MOVE_TO_LATEST_OFFSET}.
-   * 
+   *
    * Need to be synchronized as access by multiple threads
    */
   private synchronized boolean shouldMoveToLatestOffset(KafkaPartition partition, SourceState state) {
@@ -431,12 +435,12 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
       this.moveToLatestTopics.addAll(
           Splitter.on(',').trimResults().omitEmptyStrings().splitToList(state.getProp(TOPICS_MOVE_TO_LATEST_OFFSET)));
     }
-    return this.moveToLatestTopics.contains(partition.getTopicName()) || moveToLatestTopics.contains(ALL_TOPICS);
+    return this.moveToLatestTopics.contains(partition.getTopicName()) || this.moveToLatestTopics.contains(ALL_TOPICS);
   }
 
   // thread safe
   private WorkUnit createEmptyWorkUnit(KafkaPartition partition, long previousOffset,
-      Optional<State> topicSpecificState) {    
+      Optional<State> topicSpecificState) {
     Offsets offsets = new Offsets();
     offsets.setEarliestOffset(previousOffset);
     offsets.setLatestOffset(previousOffset);
@@ -541,37 +545,31 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
       return this.topicNamePattern.matcher(input.getName()).matches();
     }
   }
-  
-  private class WorkUnitCreator implements Runnable{
+
+  private class WorkUnitCreator implements Runnable {
     private final KafkaTopic topic;
     private final SourceState state;
-    private final Optional <State> topicSpecificState;
+    private final Optional<State> topicSpecificState;
     private final Map<String, List<WorkUnit>> allTopicWorkUnits;
-    
-    WorkUnitCreator(KafkaTopic topic, SourceState state, Optional<State> topicSpecificState, 
-        Map<String, List<WorkUnit>> workUnits){
+
+    WorkUnitCreator(KafkaTopic topic, SourceState state, Optional<State> topicSpecificState,
+        Map<String, List<WorkUnit>> workUnits) {
       this.topic = topic;
       this.state = state;
       this.topicSpecificState = topicSpecificState;
       this.allTopicWorkUnits = workUnits;
     }
-    
+
     @Override
     public void run() {
       try {
-        long curTime = System.currentTimeMillis();
-        LOG.info("Using thread pool to create work units for topic " + this.topic.getName());
-        List<WorkUnit> oneTopicWorkUnits =
-            KafkaSource.this.getWorkUnitsForTopic(this.topic, this.state, topicSpecificState);
-        this.allTopicWorkUnits.put(this.topic.getName(), oneTopicWorkUnits);
-        LOG.info("Done creating work unit for " + this.topic.getName() + ", created work unit size is "
-            + oneTopicWorkUnits.size() + ". Total time used for creating this topic is "
-            + (System.currentTimeMillis() - curTime) + " milliseconds");
+        this.allTopicWorkUnits.put(this.topic.getName(),
+            KafkaSource.this.getWorkUnitsForTopic(this.topic, this.state, this.topicSpecificState));
       } catch (Throwable t) {
-        LOG.error("Caught error in creating work unit for " + this.topic.getName() + " : " + t.getMessage(), t);
+        LOG.error("Caught error in creating work unit for " + this.topic.getName(), t);
         throw t;
       }
     }
-    
+
   }
 }

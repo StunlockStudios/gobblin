@@ -20,7 +20,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.fs.Path;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
 
 import lombok.extern.slf4j.Slf4j;
@@ -303,14 +302,11 @@ public class Dataset implements Comparable<Dataset>, FileSystemDataset {
     return this.simplifyOutputPath().getName();
   }
 
-
   private Path simplifyOutputPath() {
-    Path simplifiedPath =
-        new Path(StringUtils.removeEnd(this.outputPath.toString(),
-            this.jobProps().getProp(MRCompactor.COMPACTION_JOB_DEST_PARTITION, StringUtils.EMPTY)));
-    simplifiedPath =
-        new Path(StringUtils.removeEnd(simplifiedPath.toString(),
-            this.jobProps().getProp(MRCompactor.COMPACTION_DEST_SUBDIR, MRCompactor.DEFAULT_COMPACTION_DEST_SUBDIR)));
+    Path simplifiedPath = new Path(StringUtils.removeEnd(this.outputPath.toString(),
+        this.jobProps().getProp(MRCompactor.COMPACTION_JOB_DEST_PARTITION, StringUtils.EMPTY)));
+    simplifiedPath = new Path(StringUtils.removeEnd(simplifiedPath.toString(),
+        this.jobProps().getProp(MRCompactor.COMPACTION_DEST_SUBDIR, MRCompactor.DEFAULT_COMPACTION_DEST_SUBDIR)));
     return simplifiedPath;
   }
 
@@ -343,7 +339,7 @@ public class Dataset implements Comparable<Dataset>, FileSystemDataset {
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + ((inputPath == null) ? 0 : inputPath.hashCode());
+    result = prime * result + ((this.inputPath == null) ? 0 : this.inputPath.hashCode());
     return result;
   }
 
@@ -356,11 +352,11 @@ public class Dataset implements Comparable<Dataset>, FileSystemDataset {
       return false;
     }
     Dataset other = (Dataset) obj;
-    if (inputPath == null) {
+    if (this.inputPath == null) {
       if (other.inputPath != null) {
         return false;
       }
-    } else if (!inputPath.equals(other.inputPath)) {
+    } else if (!this.inputPath.equals(other.inputPath)) {
       return false;
     }
     return true;
@@ -379,7 +375,8 @@ public class Dataset implements Comparable<Dataset>, FileSystemDataset {
     return this.outputPath;
   }
 
-  @Override public String datasetURN() {
+  @Override
+  public String datasetURN() {
     return this.datasetRoot().toString();
   }
 }

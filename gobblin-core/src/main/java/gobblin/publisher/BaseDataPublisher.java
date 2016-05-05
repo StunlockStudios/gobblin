@@ -114,7 +114,7 @@ public class BaseDataPublisher extends SingleTaskDataPublisher {
       // which do NOT include directories created by the writer and moved by the publisher.
       // The permissions of those directories are controlled by writer.file.permissions and writer.dir.permissions.
       this.permissions.add(new FsPermission(state.getPropAsShortWithRadix(
-          ForkOperatorUtils.getPropertyNameForBranch(ConfigurationKeys.DATA_PUBLISHER_PERMISSIONS, numBranches, i),
+          ForkOperatorUtils.getPropertyNameForBranch(ConfigurationKeys.DATA_PUBLISHER_PERMISSIONS, this.numBranches, i),
           FsPermission.getDefault().toShort(), ConfigurationKeys.PERMISSION_PARSING_RADIX)));
     }
 
@@ -238,7 +238,7 @@ public class BaseDataPublisher extends SingleTaskDataPublisher {
             publisherOutputDir.getParent(), this.permissions.get(branchId));
       }
 
-      movePath(parallelRunner, writerOutputDir, publisherOutputDir, branchId);
+      movePath(parallelRunner, state, writerOutputDir, publisherOutputDir, branchId);
       writerOutputPathsMoved.add(writerOutputDir);
     }
   }
@@ -282,7 +282,7 @@ public class BaseDataPublisher extends SingleTaskDataPublisher {
       WriterUtils.mkdirsWithRecursivePermission(this.publisherFileSystemByBranches.get(branchId),
           publisherOutputPath.getParent(), this.permissions.get(branchId));
 
-      movePath(parallelRunner, taskOutputPath, publisherOutputPath, branchId);
+      movePath(parallelRunner, workUnitState, taskOutputPath, publisherOutputPath, branchId);
     }
   }
 
@@ -302,14 +302,15 @@ public class BaseDataPublisher extends SingleTaskDataPublisher {
                       ConfigurationKeys.DATA_PUBLISHER_FINAL_NAME, this.numBranches, branchId)))
           : new Path(publisherOutputDir, status.getPath().getName());
 
-      movePath(parallelRunner, status.getPath(), finalOutputPath, branchId);
+      movePath(parallelRunner, workUnitState, status.getPath(), finalOutputPath, branchId);
     }
   }
 
-  protected void movePath(ParallelRunner parallelRunner, Path src, Path dst, int branchId) throws IOException {
+  protected void movePath(ParallelRunner parallelRunner, State state, Path src, Path dst, int branchId) throws IOException {
     LOG.info(String.format("Moving %s to %s", src, dst));
+    boolean overwrite = state.getPropAsBoolean(ConfigurationKeys.DATA_PUBLISHER_OVERWRITE_ENABLED, false);
     this.publisherOutputDirs.addAll(recordPublisherOutputDirs(src, dst, branchId));
-    parallelRunner.movePath(src, this.publisherFileSystemByBranches.get(branchId), dst,
+    parallelRunner.movePath(src, this.publisherFileSystemByBranches.get(branchId), dst, overwrite,
         this.publisherFinalDirOwnerGroupsByBranches.get(branchId));
   }
 
@@ -320,9 +321,8 @@ public class BaseDataPublisher extends SingleTaskDataPublisher {
     // If src is a dir, add dst to the set of paths. Otherwise, add dst's parent.
     if (this.writerFileSystemByBranches.get(branchId).getFileStatus(src).isDir()) {
       return ImmutableList.<Path> of(dst);
-    } else {
-      return ImmutableList.<Path> of(dst.getParent());
     }
+    return ImmutableList.<Path> of(dst.getParent());
   }
 
   private ParallelRunner getParallelRunner(FileSystem fs) {

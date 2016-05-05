@@ -12,46 +12,28 @@
 
 package gobblin.data.management.copy.hive;
 
-import lombok.extern.slf4j.Slf4j;
-
 import java.io.IOException;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.Iterator;
 import java.util.Properties;
-import java.util.Set;
 
-import org.apache.commons.lang3.reflect.ConstructorUtils;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.metastore.IMetaStoreClient;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
-import org.apache.hadoop.hive.ql.metadata.Partition;
-import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.ql.metadata.Table;
-import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.FileSplit;
-import org.apache.hadoop.mapred.InputFormat;
-import org.apache.hadoop.mapred.InputSplit;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.JobConfigurable;
-import org.apache.thrift.TException;
 
-import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
-import com.google.common.base.Splitter;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import com.google.common.collect.Iterators;
 
 import gobblin.annotation.Alpha;
 import gobblin.data.management.copy.CopyConfiguration;
 import gobblin.data.management.copy.CopyEntity;
 import gobblin.data.management.copy.CopyableDataset;
+import gobblin.data.management.copy.IterableCopyableDataset;
+import gobblin.data.management.partition.FileSet;
 import gobblin.hive.HiveMetastoreClientPool;
-import gobblin.util.AutoReturnableObject;
 import gobblin.util.PathUtils;
+
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 
 /**
@@ -59,14 +41,16 @@ import gobblin.util.PathUtils;
  */
 @Slf4j
 @Alpha
-public class HiveDataset implements CopyableDataset {
+@Getter
+public class HiveDataset implements IterableCopyableDataset {
+
+  public static final String REGISTERER = "registerer";
+  public static final String REGISTRATION_GENERATION_TIME_MILLIS = "registrationGenerationTimeMillis";
 
   protected final Properties properties;
   protected final FileSystem fs;
   protected final HiveMetastoreClientPool clientPool;
   protected final Table table;
-  protected static final Splitter splitter = Splitter.on(",").omitEmptyStrings();
-  protected static final Joiner joiner = Joiner.on(",").skipNulls();
 
   // Only set if table has exactly one location
   protected final Optional<Path> tableRootPath;
@@ -91,13 +75,13 @@ public class HiveDataset implements CopyableDataset {
    * Finds all files read by the table and generates CopyableFiles.
    * For the specific semantics see {@link HiveCopyEntityHelper#getCopyEntities}.
    */
-  @Override public Collection<CopyEntity> getCopyableFiles(FileSystem targetFs, CopyConfiguration configuration)
+  @Override public Iterator<FileSet<CopyEntity>> getFileSetIterator(FileSystem targetFs, CopyConfiguration configuration)
       throws IOException {
     try {
       return new HiveCopyEntityHelper(this, configuration, targetFs).getCopyEntities();
     } catch (IOException ioe) {
       log.error("Failed to copy table " + this.table, ioe);
-      return Lists.newArrayList();
+      return Iterators.emptyIterator();
     }
   }
 

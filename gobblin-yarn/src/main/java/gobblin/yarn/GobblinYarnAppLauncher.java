@@ -330,7 +330,6 @@ public class GobblinYarnAppLauncher {
   }
 
   @Subscribe
-  @SuppressWarnings("unused")
   public void handleApplicationReportArrivalEvent(ApplicationReportArrivalEvent applicationReportArrivalEvent) {
     ApplicationReport applicationReport = applicationReportArrivalEvent.getApplicationReport();
 
@@ -677,6 +676,9 @@ public class GobblinYarnAppLauncher {
             .readFrom(getHdfsLogDir(appWorkDir))
             .writeTo(sinkLogDir)
             .acceptsLogFileExtensions(ImmutableSet.of(ApplicationConstants.STDOUT, ApplicationConstants.STDERR));
+    if (config.hasPath(GobblinYarnConfigurationKeys.LOG_COPIER_MAX_FILE_SIZE)) {
+      builder.useMaxBytesPerLogFile(config.getBytes(GobblinYarnConfigurationKeys.LOG_COPIER_MAX_FILE_SIZE));
+    }
     if (config.hasPath(GobblinYarnConfigurationKeys.LOG_COPIER_SCHEDULER)) {
       builder.useScheduler(config.getString(GobblinYarnConfigurationKeys.LOG_COPIER_SCHEDULER));
     }
