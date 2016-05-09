@@ -11,8 +11,7 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.DriverManager;
 
-public class StunHiveClient
-{
+public class StunHiveClient {
 	private static String driverName = "org.apache.hive.jdbc.HiveDriver";
 	private static final Logger LOG = LoggerFactory.getLogger(StunHiveClient.class);
 
@@ -21,18 +20,12 @@ public class StunHiveClient
 	 * @throws SQLException
 	 */
 	public static void ExecuteStatements(String hiveUrl, String user, String password, String... queries)
-			throws SQLException
-	{
-		try
-		{
+			throws SQLException {
+		try {
 			Class.forName(driverName);
-		}
-		catch (ClassNotFoundException e)
-		{
+		} catch (ClassNotFoundException e) {
 			throw new SQLException("ClassNotFoundException Failed to initialize class " + driverName, e);
-		}
-		catch (LinkageError e)
-		{
+		} catch (LinkageError e) {
 			throw new SQLException("LinkageError Failed to initialize class " + driverName, e);
 		}
 
@@ -43,28 +36,24 @@ public class StunHiveClient
 		// "hive", "");
 
 		Connection con = DriverManager.getConnection(hiveUrl, user, password);
-		try
-		{
+		try {
 			if (con != null && con.isClosed() == false)
 				LOG.info("JDBC Connection is Valid.");
 			else
 				LOG.error("JDBC Connection IS INVALID! :(");
-		}
-		catch (SQLException e)
-		{
+		} catch (SQLException e) {
 			LOG.error("JDBC Connection SQLException on con.isValid! " + e.toString());
 			throw new SQLException("Failed to initialize class " + driverName, e);
 		}
 		Statement stmt = con.createStatement();
 
 		//// See if the database connection and the actual database is valid
-		//TryQuery(stmt, "SHOW DATABASES");
-		//TryQuery(stmt, "USE default");
-		//TryQuery(stmt, "SHOW TABLES");
-		//TryQuery(stmt, "DESCRIBE metrics_histograms_25");
+		// TryQuery(stmt, "SHOW DATABASES");
+		// TryQuery(stmt, "USE default");
+		// TryQuery(stmt, "SHOW TABLES");
+		// TryQuery(stmt, "DESCRIBE metrics_histograms_25");
 
-		for (String query : queries)
-		{
+		for (String query : queries) {
 			TryQuery(stmt, query);
 		}
 
@@ -73,28 +62,19 @@ public class StunHiveClient
 		// con.close();
 	}
 
-	private static void TryQuery(Statement statement, String query) throws SQLException
-	{
-		try
-		{
-			LOG.info("EXECUTE: " + query);
-			if(statement.execute(query))
-			{
-				ResultSet res = statement.getResultSet();
-				
-				LOG.info("EXECUTE QUERY DONE, RESULTS:");
-				while (res.next())
-					LOG.info(res.getString(1));
-			}
-			
-			if (statement.getWarnings() != null)
-				LOG.warn(statement.getWarnings().getMessage());
+	private static void TryQuery(Statement statement, String query) throws SQLException {
+		LOG.info("EXECUTE: " + query);
+		if (statement.execute(query)) {
+			ResultSet res = statement.getResultSet();
 
-			LOG.info("EXECUTE QUERY FULLY DONE");
+			LOG.info("EXECUTE QUERY DONE, RESULTS:");
+			while (res.next())
+				LOG.info(res.getString(1));
 		}
-		catch (SQLException e)
-		{
-			LOG.error("TryQuery SQLException! Q: " + query + ", E: " + e.toString());
-		}
+
+		if (statement.getWarnings() != null)
+			LOG.warn(statement.getWarnings().getMessage());
+
+		LOG.info("EXECUTE QUERY FULLY DONE");
 	}
 }
