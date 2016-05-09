@@ -112,7 +112,8 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher
 			else
 				outputSchemaName = state.getProp(ConfigurationKeys.EXTRACT_TABLE_NAME_KEY);
 
-			Path filePath = new Path(pathStr);
+			Path fsUri = new Path(state.getProp(ConfigurationKeys.DATA_PUBLISHER_FILE_SYSTEM_URI));
+			Path filePath = new Path(fsUri, pathStr);
 			Path dateHourFolder = filePath.getParent();
 			Path dateDayFolder = dateHourFolder.getParent();
 			Path dateMonthFolder = dateDayFolder.getParent();
