@@ -14,6 +14,7 @@ package gobblin.stunlock;
 
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Properties;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -50,11 +51,11 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 
 	// @formatter:off
 	private static final String CREATE_TABLE_QUERY = "CREATE EXTERNAL TABLE IF NOT EXISTS %1$s "
-			+ "PARTITIONED BY (d string, h string) "
+			+ "PARTITIONED BY (%2$s) "
 			+ "ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.avro.AvroSerDe' "
 			+ "STORED AS INPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat' "
-			+ "OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat' " + "LOCATION '%2$s' "
-			+ "TBLPROPERTIES ('avro.schema.url'='%3$s')";
+			+ "OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat' " + "LOCATION '%3$s' "
+			+ "TBLPROPERTIES ('avro.schema.url'='%4$s')";
 
 	private static final String ALTER_TABLE_QUERY = "ALTER TABLE %1$s " + "ADD IF NOT EXISTS "
 			+ "PARTITION (%2$s) LOCATION '%3$s'";
@@ -110,36 +111,47 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 			Path filePath = new Path(fsUri, pathStr);
 
 			String dirStr = new Path(pathStr).getParent().toString();
-			int schemaNameIndex = 0;
-			int endOfSchemaDir = -1;
+
+			String[] dirSplit = dirStr.split("/");
 			Optional<Integer> schemaId = Optional.absent();
-			while (schemaId.isPresent() == false) {
+			{
 				String nameStr = outputSchemaName + "_";
-				schemaNameIndex = dirStr.indexOf(nameStr, schemaNameIndex);
-				if (schemaNameIndex == -1)
-					break;
-				endOfSchemaDir = dirStr.indexOf("/", schemaNameIndex);
-				if (endOfSchemaDir == -1) {
-					endOfSchemaDir = dirStr.length() - 1;
-				}
-				String idPart = dirStr.substring(schemaNameIndex + nameStr.length(), endOfSchemaDir);
-				try {
-					schemaId = Optional.of(Integer.parseInt(idPart));
-				} catch (NumberFormatException numex) {
-					schemaNameIndex = endOfSchemaDir;
-					continue;
+				for (int i = 0; i < dirSplit.length; i++) {
+
+					if (dirSplit[i].startsWith(prefix)) {
+						String idPart = dirStr.substring(nameStr.length(), dirSplit[i].length() - 1);
+
+						try {
+							schemaId = Optional.of(Integer.parseInt(idPart));
+						} catch (NumberFormatException numex) {
+						}
+					}
 				}
 			}
 
 			if (schemaId.isPresent() == false) {
-				throw new InvalidArgumentException("Path does not match expected format. No folder for schema id partitions in " + dirStr);
+				throw new InvalidArgumentException(
+						"Path does not match expected format. No folder for schema id partitions in " + dirStr);
 			}
 			
-			String partitionPattern = dirStr.substring(endOfSchemaDir, dirStr.length() - 1);
-			String[] partitionDirs = partitionPattern.split("/");
+			List<String> partitions = new ArrayList<String>();
+			List<String> partitionColumnDefs = new ArrayList<String>();
+			for (int i = 0; i < dirSplit.length; i++) {
+				String[] partSplit = dirSplit[i].split("=");
+				if (partSplit.length == 2) {
+					partitions.add(partSplit[0] + "='" + partSplit[1] + "'");
+					partitionColumnDefs.add(partSplit[0] + " string");
+				}
+			}
 			
+			if (partitions.size() == 0) {
+				throw new InvalidArgumentException(
+						"Path does not match expected format. No partition key/value pairs in path " + dirStr);
+			}
 			
-			
+			String partitionsString = String.join(", ", partitions);
+			String partitionDefString = String.join(", ", partitionColumnDefs);
+
 			// Register in HIVE?
 			String hdfsBaseUrl = hdfsDataBaseFolder.toString();
 
@@ -158,9 +170,10 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 
 			String hdfsTableRootLocation = hdfsBaseUrl + Path.SEPARATOR + tableName;
 
-			String createTableStmt = String.format(CREATE_TABLE_QUERY, tableName, hdfsTableRootLocation, schemaURL);
-			String alterTableStmt = String.format(ALTER_TABLE_QUERY, tableName, fullDatePartitionFolderName,
-					fullDatePartitionFolderName);
+			String createTableStmt = String.format(CREATE_TABLE_QUERY, tableName, partitionDefString, hdfsTableRootLocation, schemaURL);
+			
+			String alterTableStmt = String.format(ALTER_TABLE_QUERY, tableName, partitionsString,
+					filePath);
 			String refreshTableStmt = String.format(REFRESH_TABLE_QUERY, tableName);
 
 			LOG.info("Time to register, Q1: " + createTableStmt);
