@@ -90,11 +90,15 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher
 			WriterUtils.mkdirsWithRecursivePermission(this.publisherFileSystemByBranches.get(branchId), outputPath.getParent(), this.permissions.get(branchId));
 
 			movePath(parallelRunner, this.getState(), status.getPath(), outputPath, branchId);
-			RegisterInHive(workUnitState, outputPath.toString(), branchId);
+			try {
+				RegisterInHive(workUnitState, outputPath.toString(), branchId);
+			} catch (SQLException e) {
+				throw new IOException(e);
+			}
 		}
 	}
 
-	private void RegisterInHive(WorkUnitState state, String pathStr, int branchId)
+	private void RegisterInHive(WorkUnitState state, String pathStr, int branchId) throws SQLException
 	{
 		LOG.info("RegisterInHive: " + pathStr);
 
@@ -168,10 +172,6 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher
 			// conn.executeStatements(createTableStmt, alterTableStmt,
 			// refreshTableStmt);
 			LOG.info("Register done");
-		}
-		catch (SQLException e)
-		{
-			LOG.error(e.toString());
 		}
 		finally
 		{
