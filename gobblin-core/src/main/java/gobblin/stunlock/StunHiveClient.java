@@ -57,7 +57,6 @@ public class StunHiveClient {
 			TryQuery(stmt, query);
 		}
 
-		// Ska inte dessa köras?
 		// stmt.close();
 		// con.close();
 	}

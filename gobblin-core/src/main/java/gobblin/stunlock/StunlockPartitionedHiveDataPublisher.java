@@ -89,7 +89,7 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher
 
 			WriterUtils.mkdirsWithRecursivePermission(this.publisherFileSystemByBranches.get(branchId), outputPath.getParent(), this.permissions.get(branchId));
 
-			movePath(parallelRunner, status.getPath(), outputPath, branchId);
+			movePath(parallelRunner, this.getState(), status.getPath(), outputPath, branchId);
 			RegisterInHive(workUnitState, outputPath.toString(), branchId);
 		}
 	}
