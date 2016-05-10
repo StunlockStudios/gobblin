@@ -15,14 +15,15 @@ package gobblin.stunlock;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Properties;
+import java.lang.IllegalArgumentException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.amazonaws.services.cloudfront_2012_03_15.model.InvalidArgumentException;
 import com.google.common.base.Optional;
 import com.google.common.io.Closer;
 
@@ -59,8 +60,6 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 
 	private static final String ALTER_TABLE_QUERY = "ALTER TABLE %1$s " + "ADD IF NOT EXISTS "
 			+ "PARTITION (%2$s) LOCATION '%3$s'";
-
-	private static final String REFRESH_TABLE_QUERY = "MSCK REPAIR TABLE %1$s";
 
 	private static final String PUBLISHER_SCHEMANAME = "stun.writer.partitioner.schemaname";
 	private static final String HIVE_URL = "stun.publisher.hive.url";
@@ -101,86 +100,95 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 		// HiveJdbcConnector conn;
 		Closer closer = Closer.create();
 		try {
+			String writerPath = GetProperty(state, branchId, ConfigurationKeys.WRITER_FILE_PATH);
 			String outputSchemaName = null;
-			if (PropertyExists(state, branchId, PUBLISHER_SCHEMANAME))
-				outputSchemaName = GetProperty(state, branchId, PUBLISHER_SCHEMANAME);
-			else
-				outputSchemaName = state.getProp(ConfigurationKeys.EXTRACT_TABLE_NAME_KEY);
+			int startIndex = writerPath.length() + 1;
+			for (int i = startIndex; i < pathStr.length(); i++){
+				int chr = pathStr.charAt(i);
+				if (startIndex == i && chr == '/') {
+					startIndex++;
+				} else 	if (chr == '/' || chr == '_') {
+					outputSchemaName = pathStr.substring(startIndex, i);
+					break;
+				}
+			}
 
 			Path fsUri = new Path(state.getProp(ConfigurationKeys.DATA_PUBLISHER_FILE_SYSTEM_URI));
+
 			Path filePath = new Path(fsUri, pathStr);
 
-			String dirStr = new Path(pathStr).getParent().toString();
-
-			String[] dirSplit = dirStr.split("/");
+			String[] dirSplit = new Path(pathStr).getParent().toString().split("/");
 			Optional<Integer> schemaId = Optional.absent();
+ 		        String basePart = fsUri.toString() + "/";
+			int schemaIdIndex = -1;
 			{
 				String nameStr = outputSchemaName + "_";
 				for (int i = 0; i < dirSplit.length; i++) {
 
-					if (dirSplit[i].startsWith(prefix)) {
-						String idPart = dirStr.substring(nameStr.length(), dirSplit[i].length() - 1);
+					if (dirSplit[i].startsWith(nameStr)) {
+						String idPart = dirSplit[i].substring(nameStr.length(), dirSplit[i].length());
 
 						try {
 							schemaId = Optional.of(Integer.parseInt(idPart));
+							schemaIdIndex = i;
+							break;
 						} catch (NumberFormatException numex) {
 						}
 					}
+                                    	basePart += dirSplit[i];
+					if (i > 0)
+						basePart += "/";
 				}
 			}
 
 			if (schemaId.isPresent() == false) {
-				throw new InvalidArgumentException(
-						"Path does not match expected format. No folder for schema id partitions in " + dirStr);
+				throw new IllegalArgumentException(
+						"Path does not match expected format. No folder for schema id partitions in " + pathStr + " schemaName=" + outputSchemaName);
 			}
 			
 			List<String> partitions = new ArrayList<String>();
 			List<String> partitionColumnDefs = new ArrayList<String>();
+			List<String> partitionLocationParts = new ArrayList<String>();
 			for (int i = 0; i < dirSplit.length; i++) {
 				String[] partSplit = dirSplit[i].split("=");
 				if (partSplit.length == 2) {
 					partitions.add(partSplit[0] + "='" + partSplit[1] + "'");
 					partitionColumnDefs.add(partSplit[0] + " string");
 				}
+				if (i > schemaIdIndex) {
+					partitionLocationParts.add(dirSplit[i]);
+				}
 			}
 			
 			if (partitions.size() == 0) {
-				throw new InvalidArgumentException(
-						"Path does not match expected format. No partition key/value pairs in path " + dirStr);
+				throw new IllegalArgumentException(
+						"Path does not match expected format. No partition key/value pairs in path " + pathStr);
 			}
 			
 			String partitionsString = String.join(", ", partitions);
 			String partitionDefString = String.join(", ", partitionColumnDefs);
 
-			// Register in HIVE?
-			String hdfsBaseUrl = hdfsDataBaseFolder.toString();
 
 			String schemaRegistryBaseUrl = GetSchemaRegistryBaseUrl(state);
-			String schemaURL = schemaRegistryBaseUrl + "/schemas/ids/plain/" + schemaID.get();
-			String tableName = schemaNameAndIdFolderStr; // I have a vague
-															// memory that the
-															// tableName needed
-															// to be the same as
-															// the root output
-															// folder.
+			String schemaURL = schemaRegistryBaseUrl + "/schemas/ids/plain/" + schemaId.get();
+			String tableName = outputSchemaName + "_" + schemaId.get(); 
 
 			String hiveUrl = GetProperty(state, branchId, HIVE_URL);
 			String hiveUser = GetProperty(state, branchId, HIVE_USER);
 			String hivePassword = GetProperty(state, branchId, HIVE_PASSWORD);
 
-			String hdfsTableRootLocation = hdfsBaseUrl + Path.SEPARATOR + tableName;
+			String hdfsTableRootLocation = basePart + Path.SEPARATOR + tableName;
+
+			String relativeLocation = String.join("/", String.join("/", partitionLocationParts));
 
 			String createTableStmt = String.format(CREATE_TABLE_QUERY, tableName, partitionDefString, hdfsTableRootLocation, schemaURL);
 			
 			String alterTableStmt = String.format(ALTER_TABLE_QUERY, tableName, partitionsString,
-					filePath);
-			String refreshTableStmt = String.format(REFRESH_TABLE_QUERY, tableName);
+					relativeLocation);
 
 			LOG.info("Time to register, Q1: " + createTableStmt);
 			LOG.info("Time to register, Q2: " + alterTableStmt);
-			LOG.info("Time to register, Q3: " + refreshTableStmt);
-			StunHiveClient.ExecuteStatements(hiveUrl, hiveUser, hivePassword, createTableStmt, alterTableStmt,
-					refreshTableStmt);
+			StunHiveClient.ExecuteStatements(hiveUrl, hiveUser, hivePassword, createTableStmt, alterTableStmt);
 
 			// Old
 			// conn =
