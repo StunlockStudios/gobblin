@@ -46,6 +46,9 @@ dependencies {
   compile externalDependency.lombok
   compile externalDependency.typesafeConfig
   compile externalDependency.findBugsAnnotations
+  compile externalDependency.parquet
+  compile externalDependency.parquetAvro
+  compile externalDependency.parquetHadoop
 
   runtime externalDependency.protobuf
 
