@@ -82,7 +82,8 @@ public class Kafka0900API extends KafkaAPI
 		LOG.info("Kafka0900API Constructor");
 		Properties props = new Properties();
 		props.put("bootstrap.servers", kafkaBroker);
-		props.put("group.id", "test");
+		String groupId = state.getProp("kafka.group.name", "test");
+		props.put("group.id", groupId);
 		props.put("enable.auto.commit", "false");
 		props.put("key.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 		props.put("value.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
