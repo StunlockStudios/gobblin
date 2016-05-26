@@ -34,6 +34,7 @@ import gobblin.publisher.BaseDataPublisher;
 import gobblin.publisher.TimePartitionedDataPublisher;
 import gobblin.util.FileListUtils;
 import gobblin.util.ForkOperatorUtils;
+import gobblin.util.HadoopUtils;
 import gobblin.util.ParallelRunner;
 import gobblin.util.WriterUtils;
 
@@ -90,6 +91,7 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 			try {
 				RegisterInHive(workUnitState, outputPath.toString(), branchId);
 			} catch (SQLException e) {
+				parallelRunner.deletePath(outputPath, false);
 				throw new IOException(e);
 			}
 		}
