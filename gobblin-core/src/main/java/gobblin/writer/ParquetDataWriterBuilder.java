@@ -13,6 +13,7 @@
 package gobblin.writer;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.fs.Path;
 
@@ -21,6 +22,13 @@ import gobblin.configuration.State;
 import gobblin.util.AvroUtils;
 import gobblin.util.ForkOperatorUtils;
 import gobblin.util.WriterUtils;
+
+
+import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
+
+
+import java.io.IOException;
 
 
 /**
@@ -32,7 +40,7 @@ import gobblin.util.WriterUtils;
  *
  * @author ziliu
  */
-public abstract class ParquetDataWriterBuilder<S, D> extends PartitionAwareDataWriterBuilder<S, D> {
+public class ParquetDataWriterBuilder extends PartitionAwareDataWriterBuilder<Schema, GenericRecord> {
 
   public static final String WRITER_INCLUDE_PARTITION_IN_FILE_NAMES =
       ConfigurationKeys.WRITER_PREFIX + ".include.partition.in.file.names";
@@ -76,4 +84,19 @@ public abstract class ParquetDataWriterBuilder<S, D> extends PartitionAwareDataW
   public boolean validatePartitionSchema(Schema partitionSchema) {
     return true;
   }
+  @Override
+  public DataWriter<GenericRecord> build() throws IOException {
+    Preconditions.checkNotNull(this.destination);
+    Preconditions.checkArgument(!Strings.isNullOrEmpty(this.writerId));
+    Preconditions.checkNotNull(this.schema);
+    Preconditions.checkArgument(this.format == WriterOutputFormat.PARQUET);
+
+    switch (this.destination.getType()) {
+      case HDFS:
+        return new ParquetDataWriter(this, this.destination.getProperties());
+      default:
+        throw new RuntimeException("Unknown destination type: " + this.destination.getType());
+    }
+  }
+
 }

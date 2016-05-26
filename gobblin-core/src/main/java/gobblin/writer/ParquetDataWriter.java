@@ -75,7 +75,7 @@ public class ParquetDataWriter implements DataWriter<GenericRecord>, FinalState 
 	protected ParquetWriter<GenericRecord> writer;
 	protected final AtomicLong count = new AtomicLong(0);
 
-	public ParquetDataWriter(ParquetDataWriterBuilder<Schema, GenericRecord> builder, State properties) throws IOException {
+	public ParquetDataWriter(ParquetDataWriterBuilder builder, State properties) throws IOException {
 		this.properties = properties;
 		this.id = builder.getWriterId();
 		this.numBranches = builder.getBranches();
@@ -132,10 +132,12 @@ public class ParquetDataWriter implements DataWriter<GenericRecord>, FinalState 
 
 		// Create the parent directory of the output file if it does not exist
 		WriterUtils.mkdirsWithRecursivePermission(this.fs, this.outputFile.getParent(), this.dirPermission);
-		this.writer = AvroParquetWriter.<GenericRecord>builder(new Path(getFullyQualifiedOutputFilePath()))
+		this.writer = AvroParquetWriter.<GenericRecord>builder(this.fs.makeQualified(this.stagingFile))
 				.withConf(conf)
 				.withSchema(builder.getSchema())
 				.build();
+  	  	this.closer.register(this.writer);
+                setStagingFileGroup();
 	}
 
 	/**

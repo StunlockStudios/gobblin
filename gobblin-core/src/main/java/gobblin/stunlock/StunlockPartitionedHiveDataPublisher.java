@@ -51,12 +51,13 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 	private static final Logger LOG = LoggerFactory.getLogger(StunlockPartitionedHiveDataPublisher.class);
 
 	// @formatter:off
-	private static final String CREATE_TABLE_QUERY = "CREATE EXTERNAL TABLE IF NOT EXISTS %1$s "
-			+ "PARTITIONED BY (%2$s) "
-			+ "ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.avro.AvroSerDe' "
-			+ "STORED AS INPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat' "
-			+ "OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat' " + "LOCATION '%3$s' "
-			+ "TBLPROPERTIES ('avro.schema.url'='%4$s')";
+	private static final String CREATE_TABLE_QUERY = "CREATE TABLE IF NOT EXISTS %1$s_AVRO "
+	+ "PARTITIONED BY (%2$s) "
+	+ "ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.avro.AvroSerDe' "
+	+ "STORED AS AVRO "
+	+ "TBLPROPERTIES ('avro.schema.url'='%4$s')";
+
+	private static final String CREATE_PARQUET_TABLE_QUERY = "CREATE EXTERNAL TABLE IF NOT EXISTS %1$s LIKE %1$s_AVRO STORED AS PARQUET LOCATION '%3$s'";
 
 	private static final String ALTER_TABLE_QUERY = "ALTER TABLE %1$s " + "ADD IF NOT EXISTS "
 			+ "PARTITION (%2$s) LOCATION '%3$s'";
@@ -107,9 +108,10 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 				int chr = pathStr.charAt(i);
 				if (startIndex == i && chr == '/') {
 					startIndex++;
-				} else 	if (chr == '/' || chr == '_') {
-					outputSchemaName = pathStr.substring(startIndex, i);
+				} else if (chr == '/') {
 					break;
+				} else if (chr == '_') {
+					outputSchemaName = pathStr.substring(startIndex, i);
 				}
 			}
 
@@ -182,13 +184,15 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 			String relativeLocation = String.join("/", String.join("/", partitionLocationParts));
 
 			String createTableStmt = String.format(CREATE_TABLE_QUERY, tableName, partitionDefString, hdfsTableRootLocation, schemaURL);
+			String createParquetTableStmt = String.format(CREATE_PARQUET_TABLE_QUERY, tableName, partitionDefString, hdfsTableRootLocation, schemaURL);
 			
 			String alterTableStmt = String.format(ALTER_TABLE_QUERY, tableName, partitionsString,
 					relativeLocation);
 
 			LOG.info("Time to register, Q1: " + createTableStmt);
-			LOG.info("Time to register, Q2: " + alterTableStmt);
-			StunHiveClient.ExecuteStatements(hiveUrl, hiveUser, hivePassword, createTableStmt, alterTableStmt);
+			LOG.info("Time to register, Q2: " + createParquetTableStmt);
+			LOG.info("Time to register, Q3: " + alterTableStmt);
+			StunHiveClient.ExecuteStatements(hiveUrl, hiveUser, hivePassword, createTableStmt, createParquetTableStmt, alterTableStmt);
 
 			// Old
 			// conn =
