@@ -52,21 +52,22 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 	private static final Logger LOG = LoggerFactory.getLogger(StunlockPartitionedHiveDataPublisher.class);
 
 	// @formatter:off
-	private static final String CREATE_TABLE_QUERY = "CREATE TABLE IF NOT EXISTS %1$s_AVRO "
+	private static final String CREATE_AVRO_TABLE_QUERY = "CREATE TABLE IF NOT EXISTS %1$s_AVRO "
 	+ "PARTITIONED BY (%2$s) "
 	+ "ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.avro.AvroSerDe' "
 	+ "STORED AS AVRO "
 	+ "TBLPROPERTIES ('avro.schema.url'='%4$s')";
 
-	private static final String CREATE_PARQUET_TABLE_QUERY = "CREATE EXTERNAL TABLE IF NOT EXISTS %1$s LIKE %1$s_AVRO STORED AS PARQUET LOCATION '%3$s'";
+	private static final String CREATE_DATA_TABLE_QUERY = "CREATE EXTERNAL TABLE IF NOT EXISTS %1$s_%2$s LIKE %1$s_AVRO STORED AS %2$s LOCATION '%3$s'";
 
 	private static final String ALTER_TABLE_QUERY = "ALTER TABLE %1$s " + "ADD IF NOT EXISTS "
 			+ "PARTITION (%2$s) LOCATION '%3$s'";
 
-	private static final String PUBLISHER_SCHEMANAME = "stun.writer.partitioner.schemaname";
+	private static final String STORAGE_FORMAT = "writer.output.format";
 	private static final String HIVE_URL = "stun.publisher.hive.url";
 	private static final String HIVE_USER = "stun.publisher.hive.user";
 	private static final String HIVE_PASSWORD = "stun.publisher.hive.password";
+	private static final String TABLE_POSTFIX = "stun.publisher.table.postfix";
 	// @formatter:on
 
 	public StunlockPartitionedHiveDataPublisher(State state) throws IOException {
@@ -168,33 +169,37 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 				throw new IllegalArgumentException(
 						"Path does not match expected format. No partition key/value pairs in path " + pathStr);
 			}
+
+			String tablePostfix = "";
+
+			if(PropertyExists(state, branchId, TABLE_POSTFIX))
+				tablePostfix = GetProperty(state, branchId, TABLE_POSTFIX);
 			
 			String partitionsString = String.join(", ", partitions);
 			String partitionDefString = String.join(", ", partitionColumnDefs);
 
-
-			String schemaRegistryBaseUrl = GetSchemaRegistryBaseUrl(state);
-			String schemaURL = schemaRegistryBaseUrl + "/schemas/ids/plain/" + schemaId.get();
+			String schemaURL = StunUtils.getSchemaUrl(state, schemaId.get());
 			String tableName = outputSchemaName + "_" + schemaId.get(); 
 
 			String hiveUrl = GetProperty(state, branchId, HIVE_URL);
 			String hiveUser = GetProperty(state, branchId, HIVE_USER);
 			String hivePassword = GetProperty(state, branchId, HIVE_PASSWORD);
+			String storage_format = GetProperty(state, branchId, STORAGE_FORMAT);
 
 			String hdfsTableRootLocation = basePart + Path.SEPARATOR + tableName;
 
 			String relativeLocation = String.join("/", String.join("/", partitionLocationParts));
 
-			String createTableStmt = String.format(CREATE_TABLE_QUERY, tableName, partitionDefString, hdfsTableRootLocation, schemaURL);
-			String createParquetTableStmt = String.format(CREATE_PARQUET_TABLE_QUERY, tableName, partitionDefString, hdfsTableRootLocation, schemaURL);
+			String createAvroTableStmt = String.format(CREATE_AVRO_TABLE_QUERY, tableName, partitionDefString, hdfsTableRootLocation, schemaURL);
+			String createDataTableStmt = String.format(CREATE_DATA_TABLE_QUERY, tableName, tablePostfix, hdfsTableRootLocation, schemaURL);
 			
 			String alterTableStmt = String.format(ALTER_TABLE_QUERY, tableName, partitionsString,
 					relativeLocation);
 
-			LOG.info("Time to register, Q1: " + createTableStmt);
-			LOG.info("Time to register, Q2: " + createParquetTableStmt);
+			LOG.info("Time to register, Q1: " + createAvroTableStmt);
+			LOG.info("Time to register, Q2: " + createDataTableStmt);
 			LOG.info("Time to register, Q3: " + alterTableStmt);
-			StunHiveClient.ExecuteStatements(hiveUrl, hiveUser, hivePassword, createTableStmt, createParquetTableStmt, alterTableStmt);
+			StunHiveClient.ExecuteStatements(hiveUrl, hiveUser, hivePassword, createAvroTableStmt, createDataTableStmt, alterTableStmt);
 
 			// Old
 			// conn =
@@ -210,11 +215,7 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 			}
 		}
 	}
-
-	private String GetSchemaRegistryBaseUrl(WorkUnitState state) {
-		return state.getProp(ConfluentSchemaRegistry.SCHEMA_REGISTRY_URL);
-	}
-
+	
 	private Boolean PropertyExists(WorkUnitState state, int branchId, String propertyName) {
 		if (state.contains(ForkOperatorUtils.getPropertyNameForBranch(propertyName, branchId)))
 			return true;
