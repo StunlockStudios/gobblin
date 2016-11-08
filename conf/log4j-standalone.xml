@@ -1,33 +1,28 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
+<!DOCTYPE log4j:configuration PUBLIC "-//APACHE//DTD LOG4J 1.2//EN" "http://logging.apache.org/log4j/1.2/apidocs/org/apache/log4j/xml/doc-files/log4j.dtd">
 
 <log4j:configuration>
+  <Appenders>
+    <RollingFile name="FileRoll" fileName="${env:GOBBLIN_LOG_DIR}/gobblin-current.log" filePattern="${env:GOBBLIN_LOG_DIR}/archive/gobblin.%d{yyyy-MM-dd}.log" append="true">
+	  <Policies>
+	    <TimeBasedTriggeringPolicy/>
+	  </Policies>
+	  <PatternLayout>
+	    <Pattern>%d{yyyy-MM-dd HH:mm:ss z} %-5p [%t] %C %X{tableName} %L - %m%n</Pattern>
+	  </PatternLayout>
+	</RollingFile>
+  </Appenders>
+  <loggers>
+    <logger name="org.apache.commons.httpclient">
+      <level value="DEBUG"/>
+    </logger>
 
-  <appender name="FileRoll" class="org.apache.log4j.rolling.RollingFileAppender">
-    <param name="file" value="${gobblin.logs.dir}/gobblin-current.log" />
-    <param name="append" value="true" />
-    <param name="encoding" value="UTF-8" />
+    <logger name="httpclient.wire">
+      <level value="ERROR"/>
+    </logger>
 
-    <rollingPolicy class="org.apache.log4j.rolling.TimeBasedRollingPolicy">
-      <param name="FileNamePattern" value="${gobblin.logs.dir}/archive/gobblin.%d{yyyy-MM-dd}.log"/>
-    </rollingPolicy>
-    
-    <layout class="org.apache.log4j.PatternLayout">
-      <param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss z} %-5p [%t] %C %X{tableName} %L - %m%n"/>
-    </layout>
-  </appender>
-
-  <logger name="org.apache.commons.httpclient">
-  	<level value="DEBUG"/>
-  </logger>
-
-  <logger name="httpclient.wire">
-  	<level value="ERROR"/>
-  </logger>
-
-  <root>
-    <priority value ="INFO" /> 
-    <appender-ref ref="FileRoll" />
-  </root>
-  
+    <root level="INFO">
+      <appender-ref ref="FileRoll" />
+    </root>
+  </loggers>
 </log4j:configuration>
