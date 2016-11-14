@@ -56,12 +56,12 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 	+ "PARTITIONED BY (%2$s) "
 	+ "ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.avro.AvroSerDe' "
 	+ "STORED AS AVRO "
-	+ "TBLPROPERTIES ('avro.schema.url'='%4$s')";
+	+ "TBLPROPERTIES ('avro.schema.url'='%3$s')";
 
-	private static final String CREATE_DATA_TABLE_QUERY = "CREATE EXTERNAL TABLE IF NOT EXISTS %1$s_%2$s LIKE %1$s_AVRO STORED AS %2$s LOCATION '%3$s'";
+	private static final String CREATE_DATA_TABLE_QUERY = "CREATE EXTERNAL TABLE IF NOT EXISTS %1$s%2$s LIKE %1$s_AVRO STORED AS %3$s LOCATION '%4$s'";
 
-	private static final String ALTER_TABLE_QUERY = "ALTER TABLE %1$s " + "ADD IF NOT EXISTS "
-			+ "PARTITION (%2$s) LOCATION '%3$s'";
+	private static final String ALTER_TABLE_QUERY = "ALTER TABLE %1$s%2$s " + "ADD IF NOT EXISTS "
+			+ "PARTITION (%3$s) LOCATION '%4$s'";
 
 	private static final String STORAGE_FORMAT = "writer.output.format";
 	private static final String HIVE_URL = "stun.publisher.hive.url";
@@ -190,11 +190,10 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 
 			String relativeLocation = String.join("/", String.join("/", partitionLocationParts));
 
-			String createAvroTableStmt = String.format(CREATE_AVRO_TABLE_QUERY, tableName, partitionDefString, hdfsTableRootLocation, schemaURL);
-			String createDataTableStmt = String.format(CREATE_DATA_TABLE_QUERY, tableName, tablePostfix, hdfsTableRootLocation, schemaURL);
+			String createAvroTableStmt = String.format(CREATE_AVRO_TABLE_QUERY, tableName, partitionDefString, schemaURL);
+			String createDataTableStmt = String.format(CREATE_DATA_TABLE_QUERY, tableName, tablePostfix, storage_format, hdfsTableRootLocation);
 			
-			String alterTableStmt = String.format(ALTER_TABLE_QUERY, tableName, partitionsString,
-					relativeLocation);
+			String alterTableStmt = String.format(ALTER_TABLE_QUERY, tableName, tablePostfix, partitionsString, relativeLocation);
 
 			LOG.info("Time to register, Q1: " + createAvroTableStmt);
 			LOG.info("Time to register, Q2: " + createDataTableStmt);

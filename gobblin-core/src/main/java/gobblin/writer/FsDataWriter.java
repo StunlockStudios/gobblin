@@ -145,6 +145,11 @@ public abstract class FsDataWriter<D> implements DataWriter<D>, FinalState {
       HadoopUtils.setGroup(this.fs, this.stagingFile, this.group.get());
     }
   }
+  
+  @Override
+  public void postProcessRecords() throws IOException  {
+	  // By default do nothing. 
+  }
 
   /**
    * {@inheritDoc}.

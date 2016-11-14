@@ -35,6 +35,15 @@ public interface DataWriter<D> extends Closeable {
       throws IOException;
 
   /**
+   * Notification that all records have been written. // ZecMod
+   *
+   * @param record data record to write
+   * @throws IOException if there is anything wrong writing the record
+   */
+  public void postProcessRecords()
+      throws IOException;
+  
+  /**
    * Commit the data written.
    *
    * @throws IOException if there is anything wrong committing the output

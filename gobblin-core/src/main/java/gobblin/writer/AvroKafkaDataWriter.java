@@ -33,6 +33,11 @@ class AvroKafkaDataWriter implements DataWriter<GenericRecord> {
   public void close()
       throws IOException {
   }
+  
+  @Override
+  public void postProcessRecords() throws IOException  {
+	  // By default do nothing. 
+  }
 
   @Override
   public void commit()

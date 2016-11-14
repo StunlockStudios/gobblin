@@ -99,6 +99,12 @@ public class FileAwareInputStreamDataWriter implements DataWriter<FileAwareInput
     this.actualProcessedCopyableFile = Optional.absent();
   }
 
+  
+  @Override
+  public void postProcessRecords() throws IOException  {
+	  // By default do nothing. 
+  }
+
   @Override
   public final void write(FileAwareInputStream fileAwareInputStream) throws IOException {
     CopyableFile copyableFile = fileAwareInputStream.getFile();

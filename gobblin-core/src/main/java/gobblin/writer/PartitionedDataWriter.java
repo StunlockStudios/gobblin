@@ -110,6 +110,22 @@ public class PartitionedDataWriter<S, D> implements DataWriter<D>, FinalState {
       throw new IOException(ee);
     }
   }
+  
+  @Override
+  public void postProcessRecords() throws IOException  {
+	  int writersPostProcessed = 0;
+	    for (Map.Entry<GenericRecord, DataWriter<D>> entry : this.partitionWriters.asMap().entrySet()) {
+	      try {
+	        entry.getValue().postProcessRecords();
+	        writersPostProcessed++;
+	      } catch (Throwable throwable) {
+	        log.error(String.format("Failed to postProcess writer for partition %s.", entry.getKey()), throwable);
+	      }
+	    }
+	    if (writersPostProcessed < this.partitionWriters.asMap().size()) {
+	      throw new IOException("Failed to postProcess all writers.");
+	    }
+  }
 
   @Override
   public void commit() throws IOException {

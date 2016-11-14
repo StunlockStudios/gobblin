@@ -20,6 +20,8 @@ import org.apache.hadoop.hive.ql.exec.FileSinkOperator.RecordWriter;
 import org.apache.hadoop.hive.ql.io.HiveOutputFormat;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
 
@@ -36,14 +38,18 @@ import gobblin.configuration.State;
  * @author ziliu
  */
 public class AvroHiveWritableDataWriter extends FsDataWriter<AvroHiveWritableRecord> {
-	protected final RecordWriter writer;
+	protected RecordWriter writer;
 	protected final AtomicLong count = new AtomicLong(0);
+	private Throwable _WriterThrow;
+	private int _WriteCount = 0;
+	
+	private static final Logger LOG = LoggerFactory.getLogger(AvroHiveWritableDataWriter.class);
 
 	public AvroHiveWritableDataWriter(AvroHiveWritableDataWriterBuilder<?> builder, State properties) throws IOException {
 	    super(builder, properties);
 
 	    Preconditions.checkArgument(this.properties.contains(AvroHiveWritableDataWriterBuilder.WRITER_OUTPUT_FORMAT_CLASS));
-	    this.writer = getWriter();
+		this.writer = getWriter();
 	  }
 
 	private RecordWriter getWriter() throws IOException {
@@ -56,9 +62,9 @@ public class AvroHiveWritableDataWriter extends FsDataWriter<AvroHiveWritableRec
 			Class<? extends Writable> writableClass = (Class<? extends Writable>) Class
 					.forName(this.properties.getProp(AvroHiveWritableDataWriterBuilder.WRITER_WRITABLE_CLASS));
 
-			return outputFormat.getHiveRecordWriter(new JobConf(), this.stagingFile, writableClass, true,
-					this.properties.getProperties(), null);
+			return outputFormat.getHiveRecordWriter(new JobConf(), this.stagingFile, writableClass, true, this.properties.getProperties(), null);
 		} catch (Throwable t) {
+			LOG.error("Creating writer threw excpetion: " + t);
 			throw new IOException(String.format("Failed to create writer"), t);
 		}
 	}
@@ -66,8 +72,18 @@ public class AvroHiveWritableDataWriter extends FsDataWriter<AvroHiveWritableRec
 	@Override
 	public void write(AvroHiveWritableRecord record) throws IOException {
 		Preconditions.checkNotNull(record);
-
-		this.writer.write(record.hiveWritableRecord);
+		_WriteCount++;
+		
+		try
+		{
+			this.writer.write(record.hiveWritableRecord);
+		}
+		catch (Throwable t)
+		{
+			LOG.error("ERROR writing record to " + this.stagingFile + ". Write threw excpetion. ");
+			LOG.error("" + t);
+			throw (t);
+		}
 		this.count.incrementAndGet();
 	}
 
@@ -84,11 +100,30 @@ public class AvroHiveWritableDataWriter extends FsDataWriter<AvroHiveWritableRec
 
 		return this.fs.getFileStatus(this.outputFile).getLen();
 	}
+	
+	@Override
+	public void postProcessRecords() throws IOException {
+		try
+		{
+			LOG.info("Closing writer after writing " + _WriteCount + " records. File: " + this.fileName);
+			this.writer.close(false);
+		}
+		catch(Throwable t)
+		{
+			LOG.error("Closing writer of " + this.stagingFile + " threw excpetion. " + t);
+			_WriterThrow = t; // Store to throw on commit instead.
+		}
+		super.postProcessRecords();
+	}
+
 
 	@Override
-	public void close() throws IOException {
-		this.writer.close(false);
-		super.close();
+	public void commit() throws IOException {
+		if(_WriterThrow != null) {
+			LOG.error("Throwing prethrown _WriterThrow on commit for " + this.stagingFile + ".");
+			throw new IOException("Prethrown write.close error", _WriterThrow);
+		}
+		super.commit();
 	}
 
 }

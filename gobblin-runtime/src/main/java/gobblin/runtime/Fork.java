@@ -166,8 +166,10 @@ public class Fork implements Closeable, Runnable, FinalState {
   public void run() {
     compareAndSetForkState(ForkState.PENDING, ForkState.RUNNING);
     try {
-      processRecords();
-      compareAndSetForkState(ForkState.RUNNING, ForkState.SUCCEEDED);
+    	processRecords();
+    	if(this.writer.isPresent())
+    		this.writer.get().postProcessRecords();
+	  	compareAndSetForkState(ForkState.RUNNING, ForkState.SUCCEEDED);
     } catch (Throwable t) {
       this.forkState.set(ForkState.FAILED);
       this.logger.error(String.format("Fork %d of task %s failed to process data records", this.index, this.taskId), t);

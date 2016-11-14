@@ -147,6 +147,11 @@ abstract class InstrumentedDataWriterBase<D> implements DataWriter<D>, Instrumen
   public boolean isInstrumentationEnabled() {
     return this.instrumentationEnabled;
   }
+  
+  @Override
+  public void postProcessRecords() throws IOException {
+	  postProcessImpl();
+  }
 
   @Override
   public void write(D record)
@@ -190,6 +195,12 @@ abstract class InstrumentedDataWriterBase<D> implements DataWriter<D>, Instrumen
   public void onException(Exception exception) {
     Instrumented.markMeter(this.failedWritesMeter);
   }
+
+  /**
+   * Subclasses should implement this instead of {@link gobblin.writer.DataWriter#postProcess}
+   */
+  public abstract void postProcessImpl()
+      throws IOException;
 
   /**
    * Subclasses should implement this instead of {@link gobblin.writer.DataWriter#write}

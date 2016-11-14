@@ -231,6 +231,11 @@ public class ParquetDataWriter implements DataWriter<GenericRecord>, FinalState 
 		this.outputFile = new Path(filePathWithRecordCount);
 		return filePathWithRecordCount;
 	}
+	  
+	  @Override
+	  public void postProcessRecords() throws IOException  {
+		  // By default do nothing. 
+	  }
 
 	@Override
 	public State getFinalState() {

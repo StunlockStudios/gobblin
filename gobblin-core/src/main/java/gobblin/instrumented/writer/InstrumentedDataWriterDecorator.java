@@ -62,6 +62,11 @@ public class InstrumentedDataWriterDecorator<D> extends InstrumentedDataWriterBa
   }
 
   @Override
+  public void postProcessImpl() throws IOException {
+    this.embeddedWriter.postProcessRecords();
+  }
+
+  @Override
   public void commit() throws IOException {
     this.embeddedWriter.commit();
     super.commit();
