@@ -78,24 +78,32 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 	@Override
 	protected void addWriterOutputToExistingDir(Path writerOutput, Path publisherOutput, WorkUnitState workUnitState,
 			int branchId, ParallelRunner parallelRunner) throws IOException {
-		for (FileStatus status : FileListUtils.listFilesRecursively(this.writerFileSystemByBranches.get(branchId),
-				writerOutput)) {
-			String filePathStr = status.getPath().toString();
-			String pathSuffix = filePathStr
-					.substring(filePathStr.indexOf(writerOutput.toString()) + writerOutput.toString().length() + 1);
-			Path outputPath = new Path(publisherOutput, pathSuffix);
+		try {
+			for (FileStatus status : FileListUtils.listFilesRecursively(this.writerFileSystemByBranches.get(branchId),
+					writerOutput)) {
+				Path outputPath = getOutputPath(writerOutput, publisherOutput, status);
 
-			WriterUtils.mkdirsWithRecursivePermission(this.publisherFileSystemByBranches.get(branchId),
-					outputPath.getParent(), this.permissions.get(branchId));
+				WriterUtils.mkdirsWithRecursivePermission(this.publisherFileSystemByBranches.get(branchId),
+						outputPath.getParent(), this.permissions.get(branchId));
 
-			movePath(parallelRunner, this.getState(), status.getPath(), outputPath, branchId);
-			try {
+				movePath(parallelRunner, this.getState(), status.getPath(), outputPath, branchId);
 				RegisterInHive(workUnitState, outputPath.toString(), branchId);
-			} catch (SQLException e) {
-				parallelRunner.deletePath(outputPath, false);
-				throw new IOException(e);
 			}
+		} catch (SQLException e) {
+			for (FileStatus status : FileListUtils.listFilesRecursively(this.writerFileSystemByBranches.get(branchId),
+					writerOutput)) {
+				Path outputPath = getOutputPath(writerOutput, publisherOutput, status);
+				parallelRunner.deletePath(outputPath, false);
+			}
+			throw new IOException(e);
 		}
+	}
+
+	private Path getOutputPath(Path writerOutput, Path publisherOutput, FileStatus status) {
+		String filePathStr = status.getPath().toString();
+		String pathSuffix = filePathStr
+				.substring(filePathStr.indexOf(writerOutput.toString()) + writerOutput.toString().length() + 1);
+		return new Path(publisherOutput, pathSuffix);
 	}
 
 	private void RegisterInHive(WorkUnitState state, String pathStr, int branchId) throws SQLException {

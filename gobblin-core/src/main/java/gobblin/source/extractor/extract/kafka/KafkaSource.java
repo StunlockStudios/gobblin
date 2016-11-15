@@ -83,6 +83,7 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
   public static final String PARTITION_ID = "partition.id";
   public static final String LEADER_ID = "leader.id";
   public static final String LEADER_HOSTANDPORT = "leader.hostandport";
+  public static final String KAFKA_MAX_WORKUNIT_RECORD_COUNT = "kafka.max.workunit.record.count";
   public static final Extract.TableType DEFAULT_TABLE_TYPE = Extract.TableType.APPEND_ONLY;
   public static final String DEFAULT_NAMESPACE_NAME = "KAFKA";
   public static final String ALL_TOPICS = "all";
@@ -374,7 +375,22 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
         }
       }
     }
-
+    
+    if (state.contains(KAFKA_MAX_WORKUNIT_RECORD_COUNT))
+    {
+    	int maxWorkUnitRecordCount = state.getPropAsInt(KAFKA_MAX_WORKUNIT_RECORD_COUNT);
+    	if (maxWorkUnitRecordCount > 0) // Count "0" as "infinite", and negative values are just not allowed.
+    	{
+	    	long start = offsets.getStartOffset();
+			long end = offsets.getLatestOffset();
+			long recordCount = end - start;
+			if (recordCount > maxWorkUnitRecordCount)
+			{
+				end = start + maxWorkUnitRecordCount;
+				offsets.setLatestOffset(end);
+			}
+    	}
+    }
     return getWorkUnitForTopicPartition(partition, offsets, topicSpecificState);
   }
 
