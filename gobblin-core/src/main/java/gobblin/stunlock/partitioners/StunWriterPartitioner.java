@@ -28,6 +28,7 @@ import gobblin.writer.partitioner.TimeBasedWriterPartitioner;
 import gobblin.writer.partitioner.WriterPartitioner;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import org.apache.hadoop.hive.serde2.avro.AvroGenericRecordWritable;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -70,9 +71,9 @@ import org.apache.hadoop.fs.Path;
  * can be 'prefix/2015/11/05/suffix'.
  *
  */
-public class AvroHiveWritableWriterPartitioner implements WriterPartitioner<AvroHiveWritableRecord>
+public abstract class StunWriterPartitioner<T> implements WriterPartitioner<T>
 {
-	private static final Logger LOG = LoggerFactory.getLogger(AvroHiveWritableWriterPartitioner.class);
+	private static final Logger LOG = LoggerFactory.getLogger(StunWriterPartitioner.class);
 
 	public static final String WRITER_PARTITION_COLUMNS = ConfigurationKeys.WRITER_PREFIX + ".partition.columns";
 	public static final String WRITER_PARTITION_PREFIX = ConfigurationKeys.WRITER_PREFIX + ".partition.prefix";
@@ -95,12 +96,12 @@ public class AvroHiveWritableWriterPartitioner implements WriterPartitioner<Avro
 
 	private final CachedSchemaRegistryClient schemaRegistry;
 
-	public AvroHiveWritableWriterPartitioner(State state)
+	public StunWriterPartitioner(State state)
 	{
 		this(state, 1, 0);
 	}
 
-	public AvroHiveWritableWriterPartitioner(State state, int numBranches, int branchId)
+	public StunWriterPartitioner(State state, int numBranches, int branchId)
 	{
 		// From TimeBasedWriterPartitioner
 		this.writerPartitionPrefix = getWriterPartitionPrefix(state, numBranches, branchId);
@@ -147,7 +148,7 @@ public class AvroHiveWritableWriterPartitioner implements WriterPartitioner<Avro
 		}
 		else
 		{
-			LOG.error("AvroSchemaAndTimeWriterPartitioner: No Timestamp Schema Present. Probably missing in configuration.");
+			LOG.error("StunWriterPartitioner: No Timestamp Schema Present. Probably missing in configuration.");
 			return Optional.absent();
 		}
 	}
@@ -162,7 +163,7 @@ public class AvroHiveWritableWriterPartitioner implements WriterPartitioner<Avro
 	{
 		if (this.timestampToPathFormatter.isPresent() == false)
 		{
-			LOG.error("AvroSchemaAndTimeWriterPartitioner: No Timestamp Schema Present. Probably missing in configuration.");
+			LOG.error("StunWriterPartitioner: No Timestamp Schema Present. Probably missing in configuration.");
 			return null;
 		}
 
@@ -193,9 +194,11 @@ public class AvroHiveWritableWriterPartitioner implements WriterPartitioner<Avro
 
 	// ENTRYPOINT
 	@Override
-	public GenericRecord partitionForRecord(AvroHiveWritableRecord record)
+	public abstract GenericRecord partitionForRecord(T record);
+
+	public GenericRecord partitionForGenericRecord(GenericRecord avroRecord)
 	{
-		Schema recordSchema = record.avroSourceRecord.getSchema();
+		Schema recordSchema = avroRecord.getSchema();
 		int recordSchemaId = 0;
 		try
 		{
@@ -203,16 +206,16 @@ public class AvroHiveWritableWriterPartitioner implements WriterPartitioner<Avro
 		}
 		catch (IOException e)
 		{
-			LOG.error("AvroSchemaAndTimeWriterPartitioner: IOException in SchemaRegistry. " + e.toString());
+			LOG.error("StunWriterPartitioner: IOException in SchemaRegistry. " + e.toString());
 			return null;
 		}
 		catch (RestClientException e)
 		{
-			LOG.error("AvroSchemaAndTimeWriterPartitioner: RestClientException in SchemaRegistry. " + e.toString());
+			LOG.error("StunWriterPartitioner: RestClientException in SchemaRegistry. " + e.toString());
 			return null;
 		}
 
-		long timestamp = StunUtils.getRecordTimestamp(this.partitionColumns, record.avroSourceRecord);
+		long timestamp = StunUtils.getRecordTimestamp(this.partitionColumns, avroRecord);
 		GenericRecord partition = new GenericData.Record(this.schema);
 		if (!Strings.isNullOrEmpty(this.writerPartitionPrefix))
 		{
@@ -230,7 +233,7 @@ public class AvroHiveWritableWriterPartitioner implements WriterPartitioner<Avro
 		}
 		else
 		{
-			LOG.error("AvroSchemaAndTimeWriterPartitioner: No Timestamp Schema Present. Probably missing in configuration.");
+			LOG.error("StunWriterPartitioner: No Timestamp Schema Present. Probably missing in configuration.");
 			return null;
 		}
 
