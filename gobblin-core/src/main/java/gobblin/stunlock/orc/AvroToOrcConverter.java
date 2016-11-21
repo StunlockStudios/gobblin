@@ -33,11 +33,13 @@ import org.apache.hadoop.hive.serde2.avro.AvroGenericRecordWritable;
 public class AvroToOrcConverter {
 	private SerDe serializer;
 	private SerDe deserializer;
+	private Boolean _Initialized;
 
 	State state;
 
 	public void init(State properties) {
 		try {
+			this._Initialized = false;
 			this.state = properties;
 			this.serializer = HiveSerDeWrapper.getSerializer(state).getSerDe();
 			this.deserializer = HiveSerDeWrapper.getDeserializer(state).getSerDe();
@@ -48,19 +50,25 @@ public class AvroToOrcConverter {
 	}
 
 	public Writable convertRecord(AvroGenericRecordWritable inputRecord) throws DataConversionException {
-
 		// Added by Zec, set dynamic avro schema property.
-		try {
-			Configuration conf = HadoopUtils.getConfFromState(state);
-			
-			Properties properties = state.getProperties();
-			properties.setProperty("avro.schema.literal", inputRecord.getRecord().getSchema().toString());
+		if (_Initialized == false) {
+			try {
+				Configuration conf = HadoopUtils.getConfFromState(state);
 
-			this.serializer.initialize(conf, properties);
-			this.deserializer.initialize(conf, properties);
-		} catch (SerDeException e) {
-			log.error("Failed to initialize serializer and deserializer", e);
-			throw new DataConversionException(e);
+				Properties properties = state.getProperties();
+				properties.setProperty("avro.schema.literal", inputRecord.getRecord().getSchema().toString());
+
+				this.serializer.initialize(conf, properties);
+				this.deserializer.initialize(conf, properties);
+				_Initialized = true;
+			} catch (SerDeException e) {
+				log.error("Failed to initialize serializer and deserializer", e);
+				throw new DataConversionException(e);
+			}
+		}
+
+		if (_Initialized == false) {
+			throw new DataConversionException("Writer Initialization seems to have failed.");
 		}
 
 		try {

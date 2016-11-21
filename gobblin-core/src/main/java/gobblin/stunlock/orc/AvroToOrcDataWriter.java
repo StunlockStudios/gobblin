@@ -14,6 +14,7 @@ package gobblin.stunlock;
 
 import gobblin.writer.FsDataWriter;
 import java.io.IOException;
+import java.lang.System;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.hadoop.hive.serde2.avro.AvroGenericRecordWritable;
@@ -43,6 +44,7 @@ public class AvroToOrcDataWriter extends FsDataWriter<AvroGenericRecordWritable>
 	protected final AtomicLong count = new AtomicLong(0);
 	private Throwable _WriterThrow;
 	private int _WriteCount = 0;
+	private long _StartTime;
 	
 	private AvroToOrcConverter converter; // Have to convert this last step locally as gobblin sucks.
 	
@@ -50,6 +52,7 @@ public class AvroToOrcDataWriter extends FsDataWriter<AvroGenericRecordWritable>
 
 	public AvroToOrcDataWriter(AvroToOrcDataWriterBuilder<?> builder, State properties) throws IOException {
 	    super(builder, properties);
+		_StartTime = System.currentTimeMillis();
 
 	    Preconditions.checkArgument(this.properties.contains(AvroToOrcDataWriterBuilder.WRITER_OUTPUT_FORMAT_CLASS));
 		this.writer = getWriter();
@@ -125,7 +128,9 @@ public class AvroToOrcDataWriter extends FsDataWriter<AvroGenericRecordWritable>
 	public void postProcessRecords() throws IOException {
 		try
 		{
-			LOG.info("Closing writer after writing " + _WriteCount + " records. File: " + this.fileName);
+			long endTime = System.currentTimeMillis();
+			long duration = endTime - _StartTime;
+			LOG.info("Closing writer after writing " + _WriteCount + " records over " + (duration / 1000.0) +  " seconds . File: " + this.fileName);
 			this.writer.close(false);
 		}
 		catch(Throwable t)
