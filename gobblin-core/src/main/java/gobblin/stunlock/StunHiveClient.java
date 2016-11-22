@@ -38,7 +38,7 @@ public class StunHiveClient {
 		Connection con = DriverManager.getConnection(hiveUrl, user, password);
 		try {
 			if (con != null && con.isClosed() == false)
-				LOG.info("JDBC Connection is Valid.");
+				LOG.debug("JDBC Connection is Valid.");
 			else
 				LOG.error("JDBC Connection IS INVALID! :(");
 		} catch (SQLException e) {
@@ -62,11 +62,11 @@ public class StunHiveClient {
 	}
 
 	private static void TryQuery(Statement statement, String query) throws SQLException {
-		LOG.info("EXECUTE: " + query);
+		LOG.debug("EXECUTE: " + query);
 		if (statement.execute(query)) {
 			ResultSet res = statement.getResultSet();
 
-			LOG.info("EXECUTE QUERY DONE, RESULTS:");
+			LOG.debug("EXECUTE QUERY DONE, RESULTS:");
 			while (res.next())
 				LOG.info(res.getString(1));
 		}
@@ -74,6 +74,6 @@ public class StunHiveClient {
 		if (statement.getWarnings() != null)
 			LOG.warn(statement.getWarnings().getMessage());
 
-		LOG.info("EXECUTE QUERY FULLY DONE");
+		LOG.debug("EXECUTE QUERY FULLY DONE");
 	}
 }

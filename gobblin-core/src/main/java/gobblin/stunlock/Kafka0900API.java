@@ -95,7 +95,7 @@ public class Kafka0900API extends KafkaAPI
 
 	public List<KafkaTopic> getFilteredTopics(List<Pattern> blacklist, List<Pattern> whitelist)
 	{
-		LOG.info("Kafka0900API getFilteredTopics Start "); 
+		LOG.debug("Kafka0900API getFilteredTopics Start "); 
 		Map<String, List<PartitionInfo>> topicMetadataList = fetchTopicMetadataFromBroker(blacklist, whitelist);
 
 		List<KafkaTopic> filteredTopics = Lists.newArrayList();
@@ -105,7 +105,7 @@ public class Kafka0900API extends KafkaAPI
 			LOG.info("Got topic " + topicMetadata.getKey() + " partitions = " + partitions.size());
 			filteredTopics.add(new KafkaTopic(topicMetadata.getKey(), partitions));
 		}
-		LOG.info("Kafka0900API getFilteredTopics End");
+		LOG.debug("Kafka0900API getFilteredTopics End");
 		return filteredTopics;
 	}
 
@@ -130,15 +130,17 @@ public class Kafka0900API extends KafkaAPI
 			return null;
 		}
 
+		String concaternatedTopics= "";
 		Map<String, List<PartitionInfo>> filteredTopicMetadataList = new HashMap<String, List<PartitionInfo>>();
 		for (Entry<String, List<PartitionInfo>> topicMetadata : topicMetadataList.entrySet())
 		{
-			LOG.info("Got topic " + topicMetadata.getKey());
+			concaternatedTopics += "[" + topicMetadata.getKey() + "] ";
 			if (DatasetFilterUtils.survived(topicMetadata.getKey(), blacklist, whitelist))
 			{
 				filteredTopicMetadataList.put(topicMetadata.getKey(), topicMetadata.getValue());
 			}
 		}
+		LOG.info("Found filtered topics " + concaternatedTopics); 
 		return filteredTopicMetadataList;
 	}
 
@@ -149,22 +151,22 @@ public class Kafka0900API extends KafkaAPI
 
 	public long getEarliestOffset(KafkaPartition partition) throws KafkaOffsetRetrievalFailureException
 	{
-		LOG.info("Kafka0900API getEarliestOffset Start");
+		LOG.debug("Kafka0900API getEarliestOffset Start");
 		TopicPartition topicAndPartition = new TopicPartition(partition.getTopicName(), partition.getId());
 		List<TopicPartition> assignedPartitions = new ArrayList<TopicPartition>();
 		assignedPartitions.add(topicAndPartition);
 		consumer.assign(assignedPartitions);
-		LOG.info("Kafka0900API getEarliestOffset Assigned");
+		LOG.debug("Kafka0900API getEarliestOffset Assigned");
 		consumer.seekToBeginning(topicAndPartition);
-		LOG.info("Kafka0900API getEarliestOffset seekToBeginning");
+		LOG.debug("Kafka0900API getEarliestOffset seekToBeginning");
 		long position = consumer.position(topicAndPartition);
-		LOG.info("Kafka0900API getEarliestOffset End");
+		LOG.debug("Kafka0900API getEarliestOffset End");
 		return position;
 	}
 
 	public long getLatestOffset(KafkaPartition partition) throws KafkaOffsetRetrievalFailureException
 	{
-		LOG.info("Kafka0900API getLatestOffset Start");
+		LOG.debug("Kafka0900API getLatestOffset Start");
 		TopicPartition topicAndPartition = new TopicPartition(partition.getTopicName(), partition.getId());
 		List<TopicPartition> assignedPartitions = new ArrayList<TopicPartition>();
 		assignedPartitions.add(topicAndPartition);
@@ -180,7 +182,7 @@ public class Kafka0900API extends KafkaAPI
 			LOG.error("Error fetching kafka position for partition " + partition.toString() + ": " + exc);
 			throw exc;
 		}
-		LOG.info("Kafka0900API getLatestOffset End");
+		LOG.debug("Kafka0900API getLatestOffset End");
 		return position;
 	}
 
@@ -191,14 +193,14 @@ public class Kafka0900API extends KafkaAPI
 
 	public Iterator<MessageAndOffset> fetchNextMessageBuffer(KafkaPartition partition, long nextOffset, long maxOffset)
 	{
-		LOG.info("Kafka0900API fetchNextMessageBuffer Start on Thread ID: " + Thread.currentThread().getId());
+		LOG.debug("Kafka0900API fetchNextMessageBuffer Start on Thread ID: " + Thread.currentThread().getId());
 		if (nextOffset > maxOffset)
 		{
 			return null;
 		}
 		
 		long toFetch = maxOffset - nextOffset;
-		LOG.info("Kafka0900API Fetch NextOffset: " + nextOffset + ", MaxOffset: " + maxOffset + ", ToFetch: " + toFetch);
+		LOG.info("Kafka0900API Fetching topic: " + partition.getTopicName() + ",  NextOffset: " + nextOffset + ", MaxOffset: " + maxOffset + ", Count to fetch: " + toFetch);
 
 		TopicPartition topicPartition = new TopicPartition(partition.getTopicName(), partition.getId());
 		List<TopicPartition> assignedPartitions = new ArrayList<TopicPartition>();
@@ -211,8 +213,8 @@ public class Kafka0900API extends KafkaAPI
 			ConsumerRecords<byte[], byte[]> recordsFetched = consumer.poll(100);
 			boolean finished = false;
 			for (ConsumerRecord<byte[], byte[]> record : recordsFetched) {
-				if(records.size() % 100 == 0)
-					LOG.info("Kafka0900API Record " + records.size() + " fetched");
+				if(records.size() % 1000 == 0)
+					LOG.debug("Kafka0900API Topic: " + partition.getTopicName() + " Record " + records.size() + " fetched");
 				records.add(record);
 				if (records.size() >= toFetch) {
 					finished = true;
@@ -222,14 +224,14 @@ public class Kafka0900API extends KafkaAPI
 			if (finished)
 				break;
 		}
-		LOG.info("Kafka0900API Fetch Complete, result fetch count: " + records.size());
+		LOG.info("Kafka0900API Fetch Complete on topic: " + partition.getTopicName() + ", result fetch count: " + records.size());
 		List<MessageAndOffset> messages = new ArrayList<MessageAndOffset>();
 		for (ConsumerRecord<byte[], byte[]> record : records)
 		{
 			messages.add(new MessageAndOffset(new Message(record.value(), record.key()), record.offset()));
 		}
 
-		LOG.info("Kafka0900API fetchNextMessageBuffer End");
+		LOG.debug("Kafka0900API fetchNextMessageBuffer End");
 		return messages.iterator();
 	}
 }

@@ -386,6 +386,7 @@ public abstract class KafkaSource<S, D> extends EventBasedSource<S, D> {
 			long recordCount = end - start;
 			if (recordCount > maxWorkUnitRecordCount)
 			{
+		        LOG.warn("Limiting data for partition " + partition.getTopicName() + " to " + maxWorkUnitRecordCount + " records. Total count to fetch: " + recordCount+ ". Is kafka generating more records than we can chug and we are falling behind?");
 				end = start + maxWorkUnitRecordCount;
 				offsets.setLatestOffset(end);
 			}

@@ -203,9 +203,9 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 			
 			String alterTableStmt = String.format(ALTER_TABLE_QUERY, tableName, tablePostfix, partitionsString, relativeLocation);
 
-			LOG.info("Time to register, Q1: " + createAvroTableStmt);
-			LOG.info("Time to register, Q2: " + createDataTableStmt);
-			LOG.info("Time to register, Q3: " + alterTableStmt);
+			LOG.debug("Time to register, Q1: " + createAvroTableStmt);
+			LOG.debug("Time to register, Q2: " + createDataTableStmt);
+			LOG.debug("Time to register, Q3: " + alterTableStmt);
 			StunHiveClient.ExecuteStatements(hiveUrl, hiveUser, hivePassword, createAvroTableStmt, createDataTableStmt, alterTableStmt);
 
 			// Old
@@ -213,7 +213,7 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 			// closer.register(HiveJdbcConnector.newConnectorWithProps(properties));
 			// conn.executeStatements(createTableStmt, alterTableStmt,
 			// refreshTableStmt);
-			LOG.info("Register done");
+			LOG.debug("Register done");
 		} finally {
 			try {
 				closer.close();
