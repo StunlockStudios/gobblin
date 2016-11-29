@@ -52,15 +52,15 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 	private static final Logger LOG = LoggerFactory.getLogger(StunlockPartitionedHiveDataPublisher.class);
 
 	// @formatter:off
-	private static final String CREATE_AVRO_TABLE_QUERY = "CREATE TABLE IF NOT EXISTS %1$s_AVRO "
-	+ "PARTITIONED BY (%2$s) "
+	private static final String Q1_CREATE_AVRO_TABLE_QUERY = "CREATE TABLE IF NOT EXISTS %1$s%2$s "
+	+ "PARTITIONED BY (%3$s) "
 	+ "ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.avro.AvroSerDe' "
 	+ "STORED AS AVRO "
-	+ "TBLPROPERTIES ('avro.schema.url'='%3$s')";
+	+ "TBLPROPERTIES ('avro.schema.url'='%4$s')";
 
-	private static final String CREATE_DATA_TABLE_QUERY = "CREATE EXTERNAL TABLE IF NOT EXISTS %1$s%2$s LIKE %1$s_AVRO STORED AS %3$s LOCATION '%4$s'";
+	private static final String Q2_CREATE_DATA_TABLE_QUERY = "CREATE EXTERNAL TABLE IF NOT EXISTS %1$s%2$s LIKE %1$s_AVRO STORED AS %3$s LOCATION '%4$s'";
 
-	private static final String ALTER_TABLE_QUERY = "ALTER TABLE %1$s%2$s " + "ADD IF NOT EXISTS "
+	private static final String Q3_ALTER_TABLE_QUERY = "ALTER TABLE %1$s%2$s " + "ADD IF NOT EXISTS "
 			+ "PARTITION (%3$s) LOCATION '%4$s'";
 
 	private static final String STORAGE_FORMAT = "writer.output.format";
@@ -68,6 +68,7 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 	private static final String HIVE_USER = "stun.publisher.hive.user";
 	private static final String HIVE_PASSWORD = "stun.publisher.hive.password";
 	private static final String TABLE_POSTFIX = "stun.publisher.table.postfix";
+	private static final String SCHEMA_TABLE_POSTFIX = "stun.publisher.schema.table.postfix";
 	// @formatter:on
 
 	public StunlockPartitionedHiveDataPublisher(State state) throws IOException {
@@ -179,9 +180,13 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 			}
 
 			String tablePostfix = "";
+			String schemaTablePostfix = "";
 
 			if(PropertyExists(state, branchId, TABLE_POSTFIX))
 				tablePostfix = GetProperty(state, branchId, TABLE_POSTFIX);
+			
+			if(PropertyExists(state, branchId, SCHEMA_TABLE_POSTFIX))
+				schemaTablePostfix = GetProperty(state, branchId, SCHEMA_TABLE_POSTFIX);
 			
 			String partitionsString = String.join(", ", partitions);
 			String partitionDefString = String.join(", ", partitionColumnDefs);
@@ -198,15 +203,11 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 
 			String relativeLocation = String.join("/", String.join("/", partitionLocationParts));
 
-			String createAvroTableStmt = String.format(CREATE_AVRO_TABLE_QUERY, tableName, partitionDefString, schemaURL);
-			String createDataTableStmt = String.format(CREATE_DATA_TABLE_QUERY, tableName, tablePostfix, storage_format, hdfsTableRootLocation);
-			
-			String alterTableStmt = String.format(ALTER_TABLE_QUERY, tableName, tablePostfix, partitionsString, relativeLocation);
+			String q1_createAvroTableStmt = String.format(Q1_CREATE_AVRO_TABLE_QUERY, tableName, schemaTablePostfix, partitionDefString, schemaURL);
+			String q2_createDataTableStmt = String.format(Q2_CREATE_DATA_TABLE_QUERY, tableName, tablePostfix, storage_format, hdfsTableRootLocation);
+			String q3_alterTableStmt = String.format(Q3_ALTER_TABLE_QUERY, tableName, tablePostfix, partitionsString, relativeLocation);
 
-			LOG.debug("Time to register, Q1: " + createAvroTableStmt);
-			LOG.debug("Time to register, Q2: " + createDataTableStmt);
-			LOG.debug("Time to register, Q3: " + alterTableStmt);
-			StunHiveClient.ExecuteStatements(hiveUrl, hiveUser, hivePassword, createAvroTableStmt, createDataTableStmt, alterTableStmt);
+			StunHiveClient.ExecuteStatements(hiveUrl, hiveUser, hivePassword, q1_createAvroTableStmt, q2_createDataTableStmt, q3_alterTableStmt);
 
 			// Old
 			// conn =

@@ -62,18 +62,23 @@ public class StunHiveClient {
 	}
 
 	private static void TryQuery(Statement statement, String query) throws SQLException {
-		LOG.debug("EXECUTE: " + query);
-		if (statement.execute(query)) {
-			ResultSet res = statement.getResultSet();
+		try {
+			LOG.debug("EXECUTE: " + query);
+			if (statement.execute(query)) {
+				ResultSet res = statement.getResultSet();
 
-			LOG.debug("EXECUTE QUERY DONE, RESULTS:");
-			while (res.next())
-				LOG.info(res.getString(1));
+				LOG.debug("EXECUTE QUERY DONE, RESULTS:");
+				while (res.next())
+					LOG.info(res.getString(1));
+			}
+
+			if (statement.getWarnings() != null)
+				LOG.warn(statement.getWarnings().getMessage());
+
+			LOG.debug("EXECUTE QUERY FULLY DONE");
+		} catch (Throwable e) {
+			LOG.error("StunHive.TryQyery threw on query " + query + ", Exception: " + e.toString());
+			throw new SQLException("StunHive.TryQyery Caught Exception " + query, e);
 		}
-
-		if (statement.getWarnings() != null)
-			LOG.warn(statement.getWarnings().getMessage());
-
-		LOG.debug("EXECUTE QUERY FULLY DONE");
 	}
 }
