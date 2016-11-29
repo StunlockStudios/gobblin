@@ -58,7 +58,7 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 	+ "STORED AS AVRO "
 	+ "TBLPROPERTIES ('avro.schema.url'='%4$s')";
 
-	private static final String Q2_CREATE_DATA_TABLE_QUERY = "CREATE EXTERNAL TABLE IF NOT EXISTS %1$s%2$s LIKE %1$s_AVRO STORED AS %3$s LOCATION '%4$s'";
+	private static final String Q2_CREATE_DATA_TABLE_QUERY = "CREATE EXTERNAL TABLE IF NOT EXISTS %1$s%2$s LIKE %1$s%3$s STORED AS %4$s LOCATION '%5$s'";
 
 	private static final String Q3_ALTER_TABLE_QUERY = "ALTER TABLE %1$s%2$s " + "ADD IF NOT EXISTS "
 			+ "PARTITION (%3$s) LOCATION '%4$s'";
@@ -204,7 +204,7 @@ public class StunlockPartitionedHiveDataPublisher extends BaseDataPublisher {
 			String relativeLocation = String.join("/", String.join("/", partitionLocationParts));
 
 			String q1_createAvroTableStmt = String.format(Q1_CREATE_AVRO_TABLE_QUERY, tableName, schemaTablePostfix, partitionDefString, schemaURL);
-			String q2_createDataTableStmt = String.format(Q2_CREATE_DATA_TABLE_QUERY, tableName, tablePostfix, storage_format, hdfsTableRootLocation);
+			String q2_createDataTableStmt = String.format(Q2_CREATE_DATA_TABLE_QUERY, tableName, tablePostfix, schemaTablePostfix, storage_format, hdfsTableRootLocation);
 			String q3_alterTableStmt = String.format(Q3_ALTER_TABLE_QUERY, tableName, tablePostfix, partitionsString, relativeLocation);
 
 			StunHiveClient.ExecuteStatements(hiveUrl, hiveUser, hivePassword, q1_createAvroTableStmt, q2_createDataTableStmt, q3_alterTableStmt);
