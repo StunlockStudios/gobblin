@@ -62,23 +62,38 @@ public class StunHiveClient {
 	}
 
 	private static void TryQuery(Statement statement, String query) throws SQLException {
-		try {
-			LOG.debug("EXECUTE: " + query);
-			if (statement.execute(query)) {
-				ResultSet res = statement.getResultSet();
+		int retryCount = 20;
+		Throwable lastError = null;
+		for (int i = 0; i <= retryCount; i++) {
+			try {
+				LOG.debug("EXECUTE: " + query);
+				if (statement.execute(query)) {
+					ResultSet res = statement.getResultSet();
 
-				LOG.debug("EXECUTE QUERY DONE, RESULTS:");
-				while (res.next())
-					LOG.info(res.getString(1));
+					LOG.debug("EXECUTE QUERY DONE, RESULTS:");
+					while (res.next())
+						LOG.info(res.getString(1));
+				}
+
+				if (statement.getWarnings() != null)
+					LOG.warn(statement.getWarnings().getMessage());
+				
+				if(lastError != null)
+					LOG.info("StunHive.TryQyery succeeded after " + i + "retries. Rejoice!");
+
+				LOG.debug("EXECUTE QUERY FULLY DONE");
+				return;
+			} catch (Throwable e) {
+				LOG.warn("StunHive.TryQyery threw with " + (retryCount - i) + " retries left on query " + query + ". Sleeping 10s. Exception: " + e.toString());
+				lastError = e;
+				try {
+					Thread.sleep(10000);
+				} catch(InterruptedException ex) {
+				    Thread.currentThread().interrupt();
+				}
 			}
-
-			if (statement.getWarnings() != null)
-				LOG.warn(statement.getWarnings().getMessage());
-
-			LOG.debug("EXECUTE QUERY FULLY DONE");
-		} catch (Throwable e) {
-			LOG.error("StunHive.TryQyery threw on query " + query + ", Exception: " + e.toString());
-			throw new SQLException("StunHive.TryQyery Caught Exception " + query, e);
 		}
+		LOG.error("StunHive.TryQyery FAILED after max retries ("+  retryCount + ")\n* Query: " + query + "\n* Last Exception: " + lastError);
+		throw new SQLException("StunHive.TryQyery FAILED after max retries ("+  retryCount + ")\n* Query: " + query + "\n* Last Exception: " + lastError, lastError);
 	}
 }
